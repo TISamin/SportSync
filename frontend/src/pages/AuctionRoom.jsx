@@ -152,10 +152,17 @@ export default function AuctionRoom() {
                             <BidPanel onBid={placeBid} />
                             
                             {/* Admin Controls */}
-                            {isAdmin && !isFinished && (
+                            {isAdmin && (
                                 <div className="bg-gray-900 border border-indigo-500/30 p-6 rounded-xl flex flex-col space-y-4 mt-auto">
                                     <h3 className="text-indigo-400 font-bold uppercase tracking-widest text-xs">Admin Controls</h3>
-                                    {!currentPlayer ? (
+                                    {isFinished ? (
+                                        <button 
+                                            onClick={() => navigate(`/tournament/setup?roomCode=${roomCode}`)}
+                                            className="w-full bg-green-600 hover:bg-green-500 text-white font-black py-4 rounded-lg uppercase tracking-widest transition-all"
+                                        >
+                                            Setup Tournament
+                                        </button>
+                                    ) : !currentPlayer ? (
                                         <button 
                                             onClick={startAuction}
                                             className="w-full bg-green-600 hover:bg-green-500 text-white font-black py-4 rounded-lg uppercase tracking-widest"
