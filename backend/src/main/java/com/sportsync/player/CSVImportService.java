@@ -16,6 +16,24 @@ import java.util.List;
 @Service
 public class CSVImportService {
 
+    private Integer parseSafeInt(String val) {
+        if (val == null) return null;
+        String clean = val.trim();
+        if (clean.isEmpty()) return null;
+        // If there's a decimal point (like 100.00), take the part before it
+        if (clean.contains(".")) {
+            clean = clean.split("\\.")[0];
+        }
+        // Remove all non-digit characters (like $, commas, spaces) except negative signs
+        clean = clean.replaceAll("[^\\d-]", "");
+        if (clean.isEmpty()) return null;
+        try {
+            return Integer.parseInt(clean);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
     public List<Player> parsePlayersCsv(MultipartFile file, Long roomId) {
         List<Player> players = new ArrayList<>();
 
@@ -38,11 +56,8 @@ public class CSVImportService {
                 // name, age, batch, role, style, category, image_url, player_number, base_price
                 player.setName(line[0].trim());
                 
-                try {
-                    if (!line[1].trim().isEmpty()) player.setAge(Integer.parseInt(line[1].trim()));
-                } catch (NumberFormatException e) {
-                    // ignore age
-                }
+                Integer age = parseSafeInt(line[1]);
+                if (age != null) player.setAge(age);
                 
                 // line[2] is batch, ignored for now as it's not in the entity based on schema
                 
@@ -51,17 +66,11 @@ public class CSVImportService {
                 player.setCategory(line[5].trim());
                 player.setImageUrl(line[6].trim());
                 
-                try {
-                    if (!line[7].trim().isEmpty()) player.setPlayerNumber(Integer.parseInt(line[7].trim()));
-                } catch (NumberFormatException e) {
-                    // ignore player number
-                }
+                Integer playerNumber = parseSafeInt(line[7]);
+                if (playerNumber != null) player.setPlayerNumber(playerNumber);
                 
-                try {
-                    if (!line[8].trim().isEmpty()) player.setBasePrice(Integer.parseInt(line[8].trim()));
-                } catch (NumberFormatException e) {
-                    player.setBasePrice(0);
-                }
+                Integer basePrice = parseSafeInt(line[8]);
+                player.setBasePrice(basePrice != null ? basePrice : 0);
 
                 players.add(player);
             }
