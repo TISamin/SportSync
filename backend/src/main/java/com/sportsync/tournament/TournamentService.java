@@ -3,12 +3,15 @@ package com.sportsync.tournament;
 import com.sportsync.domain.*;
 import com.sportsync.dto.*;
 import com.sportsync.team.TeamRepository;
+import com.sportsync.team.TeamPlayerRepository;
+import com.sportsync.player.PlayerRepository;
 import com.sportsync.stats.StatsService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
@@ -24,6 +27,8 @@ public class TournamentService {
     private final StandingsService standingsService;
     private final TournamentResultRepository tournamentResultRepository;
     private final StatsService statsService;
+    private final TeamPlayerRepository teamPlayerRepository;
+    private final PlayerRepository playerRepository;
 
     public TournamentService(TournamentRepository tournamentRepository,
                              TournamentTeamRepository tournamentTeamRepository,
@@ -34,7 +39,9 @@ public class TournamentService {
                              com.sportsync.stats.MatchEventRepository matchEventRepository,
                              StandingsService standingsService,
                              TournamentResultRepository tournamentResultRepository,
-                             StatsService statsService) {
+                             StatsService statsService,
+                             TeamPlayerRepository teamPlayerRepository,
+                             PlayerRepository playerRepository) {
         this.tournamentRepository = tournamentRepository;
         this.tournamentTeamRepository = tournamentTeamRepository;
         this.fixtureRepository = fixtureRepository;
@@ -45,6 +52,8 @@ public class TournamentService {
         this.standingsService = standingsService;
         this.tournamentResultRepository = tournamentResultRepository;
         this.statsService = statsService;
+        this.teamPlayerRepository = teamPlayerRepository;
+        this.playerRepository = playerRepository;
     }
 
     @Transactional
@@ -396,5 +405,32 @@ public class TournamentService {
         PlayerStatDto topAssisterDto = topAssisters.isEmpty() ? null : topAssisters.get(0);
 
         return new TournamentResultDto(winnerDto, runnerUpDto, secondRunnerDto, topScorerDto, topAssisterDto);
+    }
+
+    /**
+     * Retrieves all teams in the tournament along with their rosters.
+     */
+    @Transactional(readOnly = true)
+    public List<TeamDto> getTournamentTeams(Long tournamentId) {
+        List<TournamentTeam> ttList = tournamentTeamRepository.findByTournamentId(tournamentId);
+        List<TeamDto> teamDtos = new ArrayList<>();
+        for (TournamentTeam tt : ttList) {
+            Team team = teamRepository.findById(tt.getTeamId()).orElse(null);
+            if (team != null) {
+                List<TeamPlayer> teamPlayers = teamPlayerRepository.findByTeamId(team.getId());
+                List<PlayerDto> roster = teamPlayers.stream().map(tp -> {
+                    Player p = playerRepository.findById(tp.getPlayerId()).orElse(null);
+                    if (p != null) {
+                        PlayerDto pDto = new PlayerDto(p);
+                        pDto.setSoldPrice(tp.getSoldPrice());
+                        return pDto;
+                    }
+                    return null;
+                }).filter(Objects::nonNull).collect(Collectors.toList());
+
+                teamDtos.add(new TeamDto(team, roster));
+            }
+        }
+        return teamDtos;
     }
 }
