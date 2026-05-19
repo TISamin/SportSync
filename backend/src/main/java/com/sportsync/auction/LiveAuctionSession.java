@@ -6,9 +6,12 @@ import com.sportsync.dto.AuctionStateDto;
 import com.sportsync.dto.PlayerDto;
 import com.sportsync.dto.TeamDto;
 
+import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Queue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledFuture;
 import java.util.stream.Collectors;
 
@@ -28,12 +31,25 @@ public class LiveAuctionSession {
     private String statusMessage = "Waiting to start...";
 
     private ScheduledFuture<?> timerTask;
+    private final Map<Long, List<PlayerDto>> teamRosters = new ConcurrentHashMap<>();
 
     public LiveAuctionSession(String roomCode, Long roomId, List<Player> availablePlayers, List<Team> teams) {
         this.roomCode = roomCode;
         this.roomId = roomId;
         this.availablePlayers = new LinkedList<>(availablePlayers);
         this.teams = teams;
+        for (Team team : teams) {
+            this.teamRosters.put(team.getId(), new ArrayList<>());
+        }
+    }
+
+    public synchronized void addAcquiredPlayer(Long teamId, Player player, Integer soldPrice) {
+        List<PlayerDto> roster = this.teamRosters.get(teamId);
+        if (roster != null) {
+            PlayerDto dto = new PlayerDto(player);
+            dto.setSoldPrice(soldPrice);
+            roster.add(dto);
+        }
     }
 
     public synchronized void startNextPlayer() {
@@ -46,7 +62,8 @@ public class LiveAuctionSession {
         }
 
         this.currentPlayer = availablePlayers.poll();
-        this.currentBid = this.currentPlayer.getBasePrice() > 0 ? this.currentPlayer.getBasePrice() : 0;
+        int basePrice = this.currentPlayer.getBasePrice() != null ? this.currentPlayer.getBasePrice() : 0;
+        this.currentBid = basePrice > 0 ? basePrice : 0;
         this.leadingTeam = null;
         this.timeRemaining = 30;
         this.active = true;
@@ -65,7 +82,9 @@ public class LiveAuctionSession {
             return false; // Already leading
         }
 
-        int requiredBid = leadingTeam == null ? currentBid : currentBid + 10; // minimum increment
+        int basePrice = currentPlayer.getBasePrice() != null ? currentPlayer.getBasePrice() : 0;
+        int increment = (int) Math.max(10, Math.round(basePrice * 0.10));
+        int requiredBid = leadingTeam == null ? currentBid : currentBid + increment;
         if (amount < requiredBid) {
             return false;
         }
@@ -111,9 +130,16 @@ public class LiveAuctionSession {
         dto.setCurrentBid(this.currentBid);
         dto.setLeadingTeam(this.leadingTeam != null ? new TeamDto(this.leadingTeam) : null);
         dto.setTimeRemaining(this.timeRemaining);
-        dto.setTeams(this.teams.stream().map(TeamDto::new).collect(Collectors.toList()));
+        dto.setTeams(this.teams.stream()
+            .map(team -> new TeamDto(team, this.teamRosters.getOrDefault(team.getId(), new ArrayList<>())))
+            .collect(Collectors.toList()));
         dto.setFinished(this.finished);
         dto.setStatusMessage(this.statusMessage);
+        
+        Map<String, Long> counts = this.availablePlayers.stream()
+            .collect(Collectors.groupingBy(Player::getCategory, Collectors.counting()));
+        dto.setCategoryCounts(counts);
+        
         return dto;
     }
 

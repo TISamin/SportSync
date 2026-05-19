@@ -60,8 +60,10 @@ public class AuctionManager {
         List<Team> teams = teamRepository.findByAuctionRoomId(room.getId());
 
         LiveAuctionSession session = new LiveAuctionSession(roomCode, room.getId(), players, teams);
+        session.startNextPlayer();
         activeSessions.put(roomCode, session);
 
+        startTimer(session);
         broadcastState(roomCode);
     }
 
@@ -129,6 +131,7 @@ public class AuctionManager {
             teamPlayerRepository.save(teamPlayer);
             
             session.updateTeamBudget(winner.getId(), dbTeam.getBudgetRemaining());
+            session.addAcquiredPlayer(winner.getId(), player, session.getCurrentBid());
         } else {
             player.setStatus(Player.PlayerStatus.UNSOLD);
         }
