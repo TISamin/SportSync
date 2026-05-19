@@ -14,9 +14,11 @@ import java.util.List;
 public class TournamentController {
 
     private final TournamentService tournamentService;
+    private final StandingRepository standingRepository;
 
-    public TournamentController(TournamentService tournamentService) {
+    public TournamentController(TournamentService tournamentService, StandingRepository standingRepository) {
         this.tournamentService = tournamentService;
+        this.standingRepository = standingRepository;
     }
 
     @PostMapping
@@ -33,5 +35,20 @@ public class TournamentController {
     public ApiResponse<List<MatchFixtureDto>> getTournamentFixtures(@PathVariable Long id) {
         List<MatchFixtureDto> fixtures = tournamentService.getTournamentFixtures(id);
         return ApiResponse.success(fixtures);
+    }
+
+    @PostMapping("/{id}/match/{matchId}/result")
+    public ApiResponse<Void> saveMatchResult(@PathVariable Long id, @PathVariable Long matchId, 
+                                             @Valid @RequestBody com.sportsync.dto.MatchResultRequest request) {
+        tournamentService.saveMatchResult(id, matchId, request);
+        return ApiResponse.success(null);
+    }
+
+    @GetMapping("/{id}/standings")
+    public ApiResponse<List<com.sportsync.domain.Standing>> getTournamentStandings(@PathVariable Long id) {
+        // Default to phase 1, group 1 for single phase
+        List<com.sportsync.domain.Standing> standings = standingRepository
+                .findByTournamentIdAndPhaseNumberAndGroupNumberOrderByPointsDescGoalDifferenceDescGoalsForDesc(id, 1, 1);
+        return ApiResponse.success(standings);
     }
 }

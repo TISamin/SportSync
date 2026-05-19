@@ -20,19 +20,25 @@ public class TournamentService {
     private final StandingRepository standingRepository;
     private final TeamRepository teamRepository;
     private final FixtureGeneratorService fixtureGeneratorService;
+    private final com.sportsync.stats.MatchEventRepository matchEventRepository;
+    private final StandingsService standingsService;
 
     public TournamentService(TournamentRepository tournamentRepository,
                              TournamentTeamRepository tournamentTeamRepository,
                              MatchFixtureRepository fixtureRepository,
                              StandingRepository standingRepository,
                              TeamRepository teamRepository,
-                             FixtureGeneratorService fixtureGeneratorService) {
+                             FixtureGeneratorService fixtureGeneratorService,
+                             com.sportsync.stats.MatchEventRepository matchEventRepository,
+                             StandingsService standingsService) {
         this.tournamentRepository = tournamentRepository;
         this.tournamentTeamRepository = tournamentTeamRepository;
         this.fixtureRepository = fixtureRepository;
         this.standingRepository = standingRepository;
         this.teamRepository = teamRepository;
         this.fixtureGeneratorService = fixtureGeneratorService;
+        this.matchEventRepository = matchEventRepository;
+        this.standingsService = standingsService;
     }
 
     @Transactional
@@ -77,5 +83,40 @@ public class TournamentService {
             dto.setAwayTeamName(awayTeam != null ? awayTeam.getName() : "Unknown");
             return dto;
         }).collect(Collectors.toList());
+    }
+
+    @Transactional
+    public void saveMatchResult(Long tournamentId, Long matchId, com.sportsync.dto.MatchResultRequest request) {
+        MatchFixture match = fixtureRepository.findById(matchId)
+                .orElseThrow(() -> new IllegalArgumentException("Match not found"));
+                
+        if (!match.getTournamentId().equals(tournamentId)) {
+            throw new IllegalArgumentException("Match does not belong to this tournament");
+        }
+        
+        if (match.getStatus() == MatchFixture.MatchStatus.DONE) {
+            throw new IllegalArgumentException("Match result already entered");
+        }
+
+        match.setHomeScore(request.getHomeScore());
+        match.setAwayScore(request.getAwayScore());
+        match.setStatus(MatchFixture.MatchStatus.DONE);
+        match.setPlayedAt(java.time.Instant.now());
+        fixtureRepository.save(match);
+
+        if (request.getEvents() != null) {
+            for (com.sportsync.dto.MatchEventRequest eventReq : request.getEvents()) {
+                MatchEvent event = new MatchEvent(matchId, eventReq.getPlayerId(), eventReq.getTeamId(), 
+                                                  eventReq.getEventType(), eventReq.getMinute());
+                matchEventRepository.save(event);
+            }
+        }
+
+        // Update standings if it's a group match
+        if (match.getRound() == MatchFixture.MatchRound.GROUP) {
+            standingsService.processMatchResult(tournamentId, match.getHomeTeamId(), match.getAwayTeamId(), 
+                                                request.getHomeScore(), request.getAwayScore(), 
+                                                match.getPhaseNumber(), match.getGroupNumber());
+        }
     }
 }
