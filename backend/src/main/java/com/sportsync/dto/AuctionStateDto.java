@@ -1,6 +1,7 @@
 package com.sportsync.dto;
 
 import java.util.List;
+import java.util.Map;
 
 public class AuctionStateDto {
     private String roomCode;
@@ -11,6 +12,7 @@ public class AuctionStateDto {
     private List<TeamDto> teams;
     private boolean isFinished;
     private String statusMessage; // e.g., "Player Sold!", "Unsold!"
+    private Map<String, Long> categoryCounts;
 
     public AuctionStateDto() {}
 
@@ -30,4 +32,6 @@ public class AuctionStateDto {
     public void setFinished(boolean finished) { isFinished = finished; }
     public String getStatusMessage() { return statusMessage; }
     public void setStatusMessage(String statusMessage) { this.statusMessage = statusMessage; }
+    public Map<String, Long> getCategoryCounts() { return categoryCounts; }
+    public void setCategoryCounts(Map<String, Long> categoryCounts) { this.categoryCounts = categoryCounts; }
 }

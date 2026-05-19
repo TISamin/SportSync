@@ -14,6 +14,7 @@ public class PlayerDto {
     private Integer playerNumber;
     private Integer basePrice;
     private Player.PlayerStatus status;
+    private Integer soldPrice;
 
     public PlayerDto() {}
 
@@ -29,6 +30,11 @@ public class PlayerDto {
         this.playerNumber = player.getPlayerNumber();
         this.basePrice = player.getBasePrice();
         this.status = player.getStatus();
+    }
+
+    public PlayerDto(Player player, Integer soldPrice) {
+        this(player);
+        this.soldPrice = soldPrice;
     }
 
     // Getters and Setters
@@ -54,4 +60,6 @@ public class PlayerDto {
     public void setBasePrice(Integer basePrice) { this.basePrice = basePrice; }
     public Player.PlayerStatus getStatus() { return status; }
     public void setStatus(Player.PlayerStatus status) { this.status = status; }
+    public Integer getSoldPrice() { return soldPrice; }
+    public void setSoldPrice(Integer soldPrice) { this.soldPrice = soldPrice; }
 }

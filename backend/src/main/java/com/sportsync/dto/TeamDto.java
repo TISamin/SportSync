@@ -2,6 +2,7 @@ package com.sportsync.dto;
 
 import com.sportsync.domain.Team;
 import java.time.Instant;
+import java.util.List;
 
 public class TeamDto {
     private Long id;
@@ -10,6 +11,7 @@ public class TeamDto {
     private String ownerName;
     private Integer budgetRemaining;
     private Instant createdAt;
+    private List<PlayerDto> roster;
 
     public TeamDto() {}
 
@@ -20,6 +22,11 @@ public class TeamDto {
         this.ownerName = team.getOwnerName();
         this.budgetRemaining = team.getBudgetRemaining();
         this.createdAt = team.getCreatedAt();
+    }
+
+    public TeamDto(Team team, List<PlayerDto> roster) {
+        this(team);
+        this.roster = roster;
     }
 
     public Long getId() { return id; }
@@ -34,4 +41,6 @@ public class TeamDto {
     public void setBudgetRemaining(Integer budgetRemaining) { this.budgetRemaining = budgetRemaining; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
+    public List<PlayerDto> getRoster() { return roster; }
+    public void setRoster(List<PlayerDto> roster) { this.roster = roster; }
 }
