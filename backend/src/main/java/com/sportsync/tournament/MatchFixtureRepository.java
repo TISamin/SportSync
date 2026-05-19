@@ -10,4 +10,14 @@ import java.util.List;
 public interface MatchFixtureRepository extends JpaRepository<MatchFixture, Long> {
     List<MatchFixture> findByTournamentId(Long tournamentId);
     List<MatchFixture> findByTournamentIdAndPhaseNumberAndGroupNumber(Long tournamentId, Integer phaseNumber, Integer groupNumber);
+
+    long countByTournamentIdAndPhaseNumberAndGroupNumberAndRoundAndStatus(
+            Long tournamentId, Integer phaseNumber, Integer groupNumber,
+            MatchFixture.MatchRound round, MatchFixture.MatchStatus status);
+
+    List<MatchFixture> findByTournamentIdAndPhaseNumberAndRound(
+            Long tournamentId, Integer phaseNumber, MatchFixture.MatchRound round);
+
+    List<MatchFixture> findByTournamentIdAndRoundIn(
+            Long tournamentId, List<MatchFixture.MatchRound> rounds);
 }

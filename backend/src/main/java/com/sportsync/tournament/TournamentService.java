@@ -98,6 +98,14 @@ public class TournamentService {
             throw new IllegalArgumentException("Match result already entered");
         }
 
+        // Knockout matches cannot end in a draw
+        if (match.getRound() != MatchFixture.MatchRound.GROUP) {
+            if (request.getHomeScore().equals(request.getAwayScore())) {
+                throw new IllegalArgumentException(
+                        "Knockout matches cannot end in a draw. Enter the score after penalties if needed.");
+            }
+        }
+
         match.setHomeScore(request.getHomeScore());
         match.setAwayScore(request.getAwayScore());
         match.setStatus(MatchFixture.MatchStatus.DONE);
@@ -112,11 +120,156 @@ public class TournamentService {
             }
         }
 
-        // Update standings if it's a group match
+        // Update standings only for group matches
         if (match.getRound() == MatchFixture.MatchRound.GROUP) {
             standingsService.processMatchResult(tournamentId, match.getHomeTeamId(), match.getAwayTeamId(), 
                                                 request.getHomeScore(), request.getAwayScore(), 
                                                 match.getPhaseNumber(), match.getGroupNumber());
+
+            // After a group match, check if all group matches are done → auto-generate knockout
+            long pendingGroupMatches = fixtureRepository.countByTournamentIdAndPhaseNumberAndGroupNumberAndRoundAndStatus(
+                    tournamentId, match.getPhaseNumber(), match.getGroupNumber(),
+                    MatchFixture.MatchRound.GROUP, MatchFixture.MatchStatus.PENDING);
+
+            if (pendingGroupMatches == 0) {
+                generateKnockoutFixtures(tournamentId, match.getPhaseNumber(), match.getGroupNumber());
+            }
         }
+
+        // After a semi-final, check if both semis are done → auto-generate final fixture
+        if (match.getRound() == MatchFixture.MatchRound.SEMI) {
+            checkAndGenerateFinal(tournamentId, match.getPhaseNumber(), match.getGroupNumber());
+        }
+    }
+
+    /**
+     * Generates the two semi-final fixtures from the top 4 teams in the group standings.
+     * Semi 1: 1st vs 4th, Semi 2: 2nd vs 3rd.
+     * Called automatically when all 28 group matches are done, or manually via the API.
+     */
+    @Transactional
+    public void generateKnockoutFixtures(Long tournamentId, int phaseNumber, int groupNumber) {
+        // Verify all group matches are done
+        long pendingGroupMatches = fixtureRepository.countByTournamentIdAndPhaseNumberAndGroupNumberAndRoundAndStatus(
+                tournamentId, phaseNumber, groupNumber,
+                MatchFixture.MatchRound.GROUP, MatchFixture.MatchStatus.PENDING);
+
+        if (pendingGroupMatches > 0) {
+            throw new IllegalStateException(
+                    "Not all group matches are completed. " + pendingGroupMatches + " matches remaining.");
+        }
+
+        // Guard against duplicate generation
+        List<MatchFixture> existingSemis = fixtureRepository.findByTournamentIdAndPhaseNumberAndRound(
+                tournamentId, phaseNumber, MatchFixture.MatchRound.SEMI);
+        if (!existingSemis.isEmpty()) {
+            throw new IllegalStateException("Knockout fixtures have already been generated for this phase.");
+        }
+
+        // Get top 4 teams from standings (sorted by points DESC, GD DESC, GF DESC)
+        List<Standing> standings = standingRepository
+                .findByTournamentIdAndPhaseNumberAndGroupNumberOrderByPointsDescGoalDifferenceDescGoalsForDesc(
+                        tournamentId, phaseNumber, groupNumber);
+
+        if (standings.size() < 4) {
+            throw new IllegalStateException("Need at least 4 teams in standings to generate knockout fixtures.");
+        }
+
+        Long team1st = standings.get(0).getTeamId();
+        Long team2nd = standings.get(1).getTeamId();
+        Long team3rd = standings.get(2).getTeamId();
+        Long team4th = standings.get(3).getTeamId();
+
+        // Semi 1: 1st vs 4th
+        MatchFixture semi1 = new MatchFixture(tournamentId, team1st, team4th,
+                phaseNumber, groupNumber, MatchFixture.MatchRound.SEMI);
+        fixtureRepository.save(semi1);
+
+        // Semi 2: 2nd vs 3rd
+        MatchFixture semi2 = new MatchFixture(tournamentId, team2nd, team3rd,
+                phaseNumber, groupNumber, MatchFixture.MatchRound.SEMI);
+        fixtureRepository.save(semi2);
+    }
+
+    /**
+     * Checks if both semi-final matches are done.
+     * If so, determines the winners and creates the final fixture.
+     */
+    private void checkAndGenerateFinal(Long tournamentId, int phaseNumber, int groupNumber) {
+        List<MatchFixture> semis = fixtureRepository.findByTournamentIdAndPhaseNumberAndRound(
+                tournamentId, phaseNumber, MatchFixture.MatchRound.SEMI);
+
+        boolean allSemisDone = semis.stream()
+                .allMatch(s -> s.getStatus() == MatchFixture.MatchStatus.DONE);
+
+        if (!allSemisDone) {
+            return; // Wait for both semis to finish
+        }
+
+        // Guard against duplicate final generation
+        List<MatchFixture> existingFinal = fixtureRepository.findByTournamentIdAndPhaseNumberAndRound(
+                tournamentId, phaseNumber, MatchFixture.MatchRound.FINAL);
+        if (!existingFinal.isEmpty()) {
+            return; // Final already generated
+        }
+
+        // Determine semi-final winners
+        Long winner1 = getMatchWinner(semis.get(0));
+        Long winner2 = getMatchWinner(semis.get(1));
+
+        if (winner1 == null || winner2 == null) {
+            throw new IllegalStateException(
+                    "Semi-final matches must have a clear winner (no draws allowed in knockouts).");
+        }
+
+        // Create the final fixture
+        MatchFixture finalMatch = new MatchFixture(tournamentId, winner1, winner2,
+                phaseNumber, groupNumber, MatchFixture.MatchRound.FINAL);
+        fixtureRepository.save(finalMatch);
+    }
+
+    /**
+     * Returns the winner (team ID) of a completed match.
+     * Returns null if the match is a draw or scores are missing.
+     */
+    private Long getMatchWinner(MatchFixture match) {
+        if (match.getHomeScore() == null || match.getAwayScore() == null) {
+            return null;
+        }
+        if (match.getHomeScore() > match.getAwayScore()) {
+            return match.getHomeTeamId();
+        } else if (match.getAwayScore() > match.getHomeScore()) {
+            return match.getAwayTeamId();
+        }
+        return null; // Draw
+    }
+
+    /**
+     * Returns all knockout fixtures (SEMI + FINAL) for a tournament.
+     */
+    @Transactional(readOnly = true)
+    public List<MatchFixtureDto> getKnockoutFixtures(Long tournamentId) {
+        List<MatchFixture> fixtures = fixtureRepository.findByTournamentIdAndRoundIn(
+                tournamentId, List.of(MatchFixture.MatchRound.SEMI, MatchFixture.MatchRound.FINAL));
+
+        return fixtures.stream().map(fixture -> {
+            MatchFixtureDto dto = new MatchFixtureDto(fixture);
+            Team homeTeam = teamRepository.findById(fixture.getHomeTeamId()).orElse(null);
+            Team awayTeam = teamRepository.findById(fixture.getAwayTeamId()).orElse(null);
+            dto.setHomeTeamName(homeTeam != null ? homeTeam.getName() : "TBD");
+            dto.setAwayTeamName(awayTeam != null ? awayTeam.getName() : "TBD");
+            return dto;
+        }).collect(Collectors.toList());
+    }
+
+    /**
+     * Checks whether all group matches for a given phase/group are completed.
+     */
+    @Transactional(readOnly = true)
+    public boolean areAllGroupMatchesDone(Long tournamentId, int phaseNumber, int groupNumber) {
+        long pending = fixtureRepository.countByTournamentIdAndPhaseNumberAndGroupNumberAndRoundAndStatus(
+                tournamentId, phaseNumber, groupNumber,
+                MatchFixture.MatchRound.GROUP, MatchFixture.MatchStatus.PENDING);
+        return pending == 0;
     }
 }
