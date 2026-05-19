@@ -143,6 +143,26 @@ public class AuctionManager {
         if (session == null) return;
         
         AuctionRoom room = roomRepository.findById(session.getRoomId()).orElseThrow();
+        
+        // Distribute unsold players
+        List<Player> unsoldPlayers = playerRepository.findByAuctionRoomIdAndStatus(room.getId(), Player.PlayerStatus.UNSOLD);
+        List<Team> teams = teamRepository.findByAuctionRoomIdOrderByBudgetRemainingAsc(room.getId());
+        
+        if (!teams.isEmpty() && !unsoldPlayers.isEmpty()) {
+            int teamIndex = 0;
+            for (Player player : unsoldPlayers) {
+                Team team = teams.get(teamIndex);
+                
+                player.setStatus(Player.PlayerStatus.SOLD);
+                playerRepository.save(player);
+                
+                TeamPlayer teamPlayer = new TeamPlayer(team.getId(), player.getId(), 0, TeamPlayer.AcquiredVia.DISTRIBUTED);
+                teamPlayerRepository.save(teamPlayer);
+                
+                teamIndex = (teamIndex + 1) % teams.size();
+            }
+        }
+        
         room.setStatus(AuctionRoom.AuctionRoomStatus.DONE);
         roomRepository.save(room);
         
@@ -150,7 +170,6 @@ public class AuctionManager {
         
         // Notify frontend that auction is fully over
         messagingTemplate.convertAndSend("/topic/auction/" + roomCode + "/ended", "ENDED");
-        broadcastState(roomCode);
     }
 
     private void broadcastState(String roomCode) {
