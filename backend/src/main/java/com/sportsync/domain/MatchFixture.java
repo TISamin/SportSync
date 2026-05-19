@@ -90,7 +90,7 @@ public class MatchFixture {
     public void setPlayedAt(Instant playedAt) { this.playedAt = playedAt; }
 
     public enum MatchRound {
-        GROUP, SEMI, FINAL
+        GROUP, ROUND_OF_16, QUARTER, SEMI, FINAL
     }
 
     public enum MatchStatus {

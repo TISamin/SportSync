@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -56,13 +57,24 @@ public class TournamentService {
         this.playerRepository = playerRepository;
     }
 
+    @Transactional(readOnly = true)
+    public TournamentDto getTournament(Long tournamentId) {
+        Tournament tournament = tournamentRepository.findById(tournamentId)
+                .orElseThrow(() -> new IllegalArgumentException("Tournament not found"));
+        return new TournamentDto(tournament);
+    }
+
     @Transactional
     public TournamentDto createTournament(String name, String type, List<Long> teamIds) {
-        if (teamIds.size() != 8) {
+        Tournament.TournamentType tournamentType = Tournament.TournamentType.valueOf(type);
+        
+        if (tournamentType == Tournament.TournamentType.SINGLE && teamIds.size() != 8) {
             throw new IllegalArgumentException("Single phase tournament requires exactly 8 teams");
         }
+        if (tournamentType == Tournament.TournamentType.DOUBLE && teamIds.size() != 64) {
+            throw new IllegalArgumentException("Double phase tournament requires exactly 64 teams");
+        }
 
-        Tournament.TournamentType tournamentType = Tournament.TournamentType.valueOf(type);
         Tournament tournament = new Tournament(name, tournamentType);
         tournament = tournamentRepository.save(tournament);
 
@@ -71,17 +83,37 @@ public class TournamentService {
             Team team = teamRepository.findById(teamId)
                     .orElseThrow(() -> new IllegalArgumentException("Team not found: " + teamId));
             teams.add(team);
-            
-            TournamentTeam tt = new TournamentTeam(tournament.getId(), team.getId(), 1, 1);
-            tournamentTeamRepository.save(tt);
-            
-            Standing standing = new Standing(tournament.getId(), team.getId(), 1, 1);
-            standingRepository.save(standing);
         }
 
-        // Generate round-robin fixtures
-        List<MatchFixture> fixtures = fixtureGeneratorService.generateRoundRobinFixtures(tournament.getId(), teams, 1, 1);
-        fixtureRepository.saveAll(fixtures);
+        if (tournamentType == Tournament.TournamentType.SINGLE) {
+            for (Team team : teams) {
+                TournamentTeam tt = new TournamentTeam(tournament.getId(), team.getId(), 1, 1);
+                tournamentTeamRepository.save(tt);
+                
+                Standing standing = new Standing(tournament.getId(), team.getId(), 1, 1);
+                standingRepository.save(standing);
+            }
+            List<MatchFixture> fixtures = fixtureGeneratorService.generateRoundRobinFixtures(tournament.getId(), teams, 1, 1);
+            fixtureRepository.saveAll(fixtures);
+        } else {
+            // DOUBLE phase tournament: 64 teams divided into 8 groups of 8 teams
+            for (int groupIdx = 0; groupIdx < 8; groupIdx++) {
+                int groupNum = groupIdx + 1;
+                List<Team> groupTeams = new ArrayList<>();
+                for (int teamIdx = 0; teamIdx < 8; teamIdx++) {
+                    Team team = teams.get(groupIdx * 8 + teamIdx);
+                    groupTeams.add(team);
+
+                    TournamentTeam tt = new TournamentTeam(tournament.getId(), team.getId(), 1, groupNum);
+                    tournamentTeamRepository.save(tt);
+                    
+                    Standing standing = new Standing(tournament.getId(), team.getId(), 1, groupNum);
+                    standingRepository.save(standing);
+                }
+                List<MatchFixture> groupFixtures = fixtureGeneratorService.generateRoundRobinFixtures(tournament.getId(), groupTeams, 1, groupNum);
+                fixtureRepository.saveAll(groupFixtures);
+            }
+        }
 
         return new TournamentDto(tournament);
     }
@@ -135,30 +167,60 @@ public class TournamentService {
             }
         }
 
+        Tournament tournament = tournamentRepository.findById(tournamentId)
+                .orElseThrow(() -> new IllegalArgumentException("Tournament not found"));
+
         // Update standings only for group matches
         if (match.getRound() == MatchFixture.MatchRound.GROUP) {
             standingsService.processMatchResult(tournamentId, match.getHomeTeamId(), match.getAwayTeamId(), 
                                                 request.getHomeScore(), request.getAwayScore(), 
                                                 match.getPhaseNumber(), match.getGroupNumber());
 
-            // After a group match, check if all group matches are done → auto-generate knockout
-            long pendingGroupMatches = fixtureRepository.countByTournamentIdAndPhaseNumberAndGroupNumberAndRoundAndStatus(
-                    tournamentId, match.getPhaseNumber(), match.getGroupNumber(),
-                    MatchFixture.MatchRound.GROUP, MatchFixture.MatchStatus.PENDING);
+            if (tournament.getType() == Tournament.TournamentType.SINGLE) {
+                // After a group match, check if all group matches are done → auto-generate knockout
+                long pendingGroupMatches = fixtureRepository.countByTournamentIdAndPhaseNumberAndGroupNumberAndRoundAndStatus(
+                        tournamentId, match.getPhaseNumber(), match.getGroupNumber(),
+                        MatchFixture.MatchRound.GROUP, MatchFixture.MatchStatus.PENDING);
 
-            if (pendingGroupMatches == 0) {
-                generateKnockoutFixtures(tournamentId, match.getPhaseNumber(), match.getGroupNumber());
+                if (pendingGroupMatches == 0) {
+                    generateKnockoutFixtures(tournamentId, match.getPhaseNumber(), match.getGroupNumber());
+                }
+            } else {
+                // DOUBLE phase tournament
+                if (match.getPhaseNumber() == 1) {
+                    // Check if all Phase 1 matches are done
+                    long pendingPhase1 = fixtureRepository.countByTournamentIdAndPhaseNumberAndRoundAndStatus(
+                            tournamentId, 1, MatchFixture.MatchRound.GROUP, MatchFixture.MatchStatus.PENDING);
+                    if (pendingPhase1 == 0) {
+                        generatePhase2(tournamentId);
+                    }
+                } else if (match.getPhaseNumber() == 2) {
+                    // Check if all Phase 2 group matches are done
+                    long pendingPhase2Groups = fixtureRepository.countByTournamentIdAndPhaseNumberAndRoundAndStatus(
+                            tournamentId, 2, MatchFixture.MatchRound.GROUP, MatchFixture.MatchStatus.PENDING);
+                    if (pendingPhase2Groups == 0) {
+                        generatePhase2Knockout(tournamentId);
+                    }
+                }
             }
-        }
-
-        // After a semi-final, check if both semis are done → auto-generate final fixture
-        if (match.getRound() == MatchFixture.MatchRound.SEMI) {
-            checkAndGenerateFinal(tournamentId, match.getPhaseNumber(), match.getGroupNumber());
-        }
-
-        // After a final, check if final is done → save tournament result and set status to DONE
-        if (match.getRound() == MatchFixture.MatchRound.FINAL) {
-            completeTournament(tournamentId, match.getPhaseNumber(), match.getGroupNumber(), match);
+        } else {
+            // Knockout match completed
+            if (tournament.getType() == Tournament.TournamentType.SINGLE) {
+                if (match.getRound() == MatchFixture.MatchRound.SEMI) {
+                    checkAndGenerateFinal(tournamentId, match.getPhaseNumber(), match.getGroupNumber());
+                } else if (match.getRound() == MatchFixture.MatchRound.FINAL) {
+                    completeTournament(tournamentId, match.getPhaseNumber(), match.getGroupNumber(), match);
+                }
+            } else {
+                // DOUBLE phase knockout progression
+                if (match.getRound() == MatchFixture.MatchRound.ROUND_OF_16 ||
+                    match.getRound() == MatchFixture.MatchRound.QUARTER ||
+                    match.getRound() == MatchFixture.MatchRound.SEMI) {
+                    checkAndGenerateNextKnockoutRound(tournamentId, match.getPhaseNumber(), match.getRound());
+                } else if (match.getRound() == MatchFixture.MatchRound.FINAL) {
+                    completeTournament(tournamentId, match.getPhaseNumber(), match.getGroupNumber(), match);
+                }
+            }
         }
     }
 
@@ -265,12 +327,17 @@ public class TournamentService {
     }
 
     /**
-     * Returns all knockout fixtures (SEMI + FINAL) for a tournament.
+     * Returns all knockout fixtures (ROUND_OF_16, QUARTER, SEMI, FINAL) for a tournament.
      */
     @Transactional(readOnly = true)
     public List<MatchFixtureDto> getKnockoutFixtures(Long tournamentId) {
         List<MatchFixture> fixtures = fixtureRepository.findByTournamentIdAndRoundIn(
-                tournamentId, List.of(MatchFixture.MatchRound.SEMI, MatchFixture.MatchRound.FINAL));
+                tournamentId, List.of(
+                        MatchFixture.MatchRound.ROUND_OF_16,
+                        MatchFixture.MatchRound.QUARTER,
+                        MatchFixture.MatchRound.SEMI,
+                        MatchFixture.MatchRound.FINAL
+                ));
 
         return fixtures.stream().map(fixture -> {
             MatchFixtureDto dto = new MatchFixtureDto(fixture);
@@ -330,11 +397,9 @@ public class TournamentService {
         Long semi1Loser = semi1Winner.equals(semis.get(0).getHomeTeamId()) ? semis.get(0).getAwayTeamId() : semis.get(0).getHomeTeamId();
         Long semi2Loser = semi2Winner.equals(semis.get(1).getHomeTeamId()) ? semis.get(1).getAwayTeamId() : semis.get(1).getHomeTeamId();
 
-        Standing standing1 = standingRepository.findByTournamentIdAndTeamIdAndPhaseNumberAndGroupNumber(
-                tournamentId, semi1Loser, phaseNumber, groupNumber)
+        Standing standing1 = standingRepository.findFirstByTournamentIdAndTeamIdAndPhaseNumber(tournamentId, semi1Loser, phaseNumber)
                 .orElseThrow(() -> new IllegalStateException("Standing not found for team: " + semi1Loser));
-        Standing standing2 = standingRepository.findByTournamentIdAndTeamIdAndPhaseNumberAndGroupNumber(
-                tournamentId, semi2Loser, phaseNumber, groupNumber)
+        Standing standing2 = standingRepository.findFirstByTournamentIdAndTeamIdAndPhaseNumber(tournamentId, semi2Loser, phaseNumber)
                 .orElseThrow(() -> new IllegalStateException("Standing not found for team: " + semi2Loser));
 
         Long secondRunnerId;
@@ -413,9 +478,11 @@ public class TournamentService {
     @Transactional(readOnly = true)
     public List<TeamDto> getTournamentTeams(Long tournamentId) {
         List<TournamentTeam> ttList = tournamentTeamRepository.findByTournamentId(tournamentId);
+        // De-duplicate team list (since in double phase, teams can have mappings in phase 1 and phase 2)
+        List<Long> teamIds = ttList.stream().map(TournamentTeam::getTeamId).distinct().collect(Collectors.toList());
         List<TeamDto> teamDtos = new ArrayList<>();
-        for (TournamentTeam tt : ttList) {
-            Team team = teamRepository.findById(tt.getTeamId()).orElse(null);
+        for (Long teamId : teamIds) {
+            Team team = teamRepository.findById(teamId).orElse(null);
             if (team != null) {
                 List<TeamPlayer> teamPlayers = teamPlayerRepository.findByTeamId(team.getId());
                 List<PlayerDto> roster = teamPlayers.stream().map(tp -> {
@@ -432,5 +499,256 @@ public class TournamentService {
             }
         }
         return teamDtos;
+    }
+
+    /**
+     * Distributes top 4 teams from all 8 groups of Phase 1 into 4 groups of Phase 2
+     * and generates group round-robin fixtures.
+     */
+    @Transactional
+    public void generatePhase2(Long tournamentId) {
+        // Verify all Phase 1 group matches are done
+        long pendingPhase1 = fixtureRepository.countByTournamentIdAndPhaseNumberAndRoundAndStatus(
+                tournamentId, 1, MatchFixture.MatchRound.GROUP, MatchFixture.MatchStatus.PENDING);
+
+        if (pendingPhase1 > 0) {
+            throw new IllegalStateException(
+                    "Not all Phase 1 group matches are completed. " + pendingPhase1 + " matches remaining.");
+        }
+
+        // Guard against duplicate phase 2 generation
+        List<MatchFixture> existingPhase2 = fixtureRepository.findByTournamentIdAndPhaseNumberAndRound(
+                tournamentId, 2, MatchFixture.MatchRound.GROUP);
+        if (!existingPhase2.isEmpty()) {
+            throw new IllegalStateException("Phase 2 fixtures have already been generated.");
+        }
+
+        // Fetch top 4 from all 8 groups of Phase 1
+        List<List<Standing>> standingsByGroup = new ArrayList<>();
+        for (int groupIdx = 0; groupIdx < 8; groupIdx++) {
+            int groupNum = groupIdx + 1;
+            List<Standing> standings = standingRepository
+                    .findByTournamentIdAndPhaseNumberAndGroupNumberOrderByPointsDescGoalDifferenceDescGoalsForDesc(
+                            tournamentId, 1, groupNum);
+            if (standings.size() < 4) {
+                throw new IllegalStateException("Group " + groupNum + " does not have enough teams in standings.");
+            }
+            standingsByGroup.add(standings);
+        }
+
+        // Distribute 32 teams into 4 groups of Phase 2
+        // Group 1 (Phase 2): A1, B2, C3, D4, E1, F2, G3, H4 (standingsByGroup indices: 0..7)
+        // Group 2 (Phase 2): B1, C2, D3, E4, F1, G2, H3, A4
+        // Group 3 (Phase 2): C1, D2, E3, F4, G1, H2, A3, B4
+        // Group 4 (Phase 2): D1, E2, F3, G4, H1, A2, B3, C4
+        List<List<Long>> phase2GroupTeamIds = new ArrayList<>();
+        for (int i = 0; i < 4; i++) {
+            phase2GroupTeamIds.add(new ArrayList<>());
+        }
+        
+        // Group 1
+        phase2GroupTeamIds.get(0).add(standingsByGroup.get(0).get(0).getTeamId()); // A1
+        phase2GroupTeamIds.get(0).add(standingsByGroup.get(1).get(1).getTeamId()); // B2
+        phase2GroupTeamIds.get(0).add(standingsByGroup.get(2).get(2).getTeamId()); // C3
+        phase2GroupTeamIds.get(0).add(standingsByGroup.get(3).get(3).getTeamId()); // D4
+        phase2GroupTeamIds.get(0).add(standingsByGroup.get(4).get(0).getTeamId()); // E1
+        phase2GroupTeamIds.get(0).add(standingsByGroup.get(5).get(1).getTeamId()); // F2
+        phase2GroupTeamIds.get(0).add(standingsByGroup.get(6).get(2).getTeamId()); // G3
+        phase2GroupTeamIds.get(0).add(standingsByGroup.get(7).get(3).getTeamId()); // H4
+
+        // Group 2
+        phase2GroupTeamIds.get(1).add(standingsByGroup.get(1).get(0).getTeamId()); // B1
+        phase2GroupTeamIds.get(1).add(standingsByGroup.get(2).get(1).getTeamId()); // C2
+        phase2GroupTeamIds.get(1).add(standingsByGroup.get(3).get(2).getTeamId()); // D3
+        phase2GroupTeamIds.get(1).add(standingsByGroup.get(4).get(3).getTeamId()); // E4
+        phase2GroupTeamIds.get(1).add(standingsByGroup.get(5).get(0).getTeamId()); // F1
+        phase2GroupTeamIds.get(1).add(standingsByGroup.get(6).get(1).getTeamId()); // G2
+        phase2GroupTeamIds.get(1).add(standingsByGroup.get(7).get(2).getTeamId()); // H3
+        phase2GroupTeamIds.get(1).add(standingsByGroup.get(0).get(3).getTeamId()); // A4
+
+        // Group 3
+        phase2GroupTeamIds.get(2).add(standingsByGroup.get(2).get(0).getTeamId()); // C1
+        phase2GroupTeamIds.get(2).add(standingsByGroup.get(3).get(1).getTeamId()); // D2
+        phase2GroupTeamIds.get(2).add(standingsByGroup.get(4).get(2).getTeamId()); // E3
+        phase2GroupTeamIds.get(2).add(standingsByGroup.get(5).get(3).getTeamId()); // F4
+        phase2GroupTeamIds.get(2).add(standingsByGroup.get(6).get(0).getTeamId()); // G1
+        phase2GroupTeamIds.get(2).add(standingsByGroup.get(7).get(1).getTeamId()); // H2
+        phase2GroupTeamIds.get(2).add(standingsByGroup.get(0).get(2).getTeamId()); // A3
+        phase2GroupTeamIds.get(2).add(standingsByGroup.get(1).get(3).getTeamId()); // B4
+
+        // Group 4
+        phase2GroupTeamIds.get(3).add(standingsByGroup.get(3).get(0).getTeamId()); // D1
+        phase2GroupTeamIds.get(3).add(standingsByGroup.get(4).get(1).getTeamId()); // E2
+        phase2GroupTeamIds.get(3).add(standingsByGroup.get(5).get(2).getTeamId()); // F3
+        phase2GroupTeamIds.get(3).add(standingsByGroup.get(6).get(3).getTeamId()); // G4
+        phase2GroupTeamIds.get(3).add(standingsByGroup.get(7).get(0).getTeamId()); // H1
+        phase2GroupTeamIds.get(3).add(standingsByGroup.get(0).get(1).getTeamId()); // A2
+        phase2GroupTeamIds.get(3).add(standingsByGroup.get(1).get(2).getTeamId()); // B3
+        phase2GroupTeamIds.get(3).add(standingsByGroup.get(2).get(3).getTeamId()); // C4
+
+        // For each of the 4 groups, create TournamentTeam, Standing and generate fixtures
+        for (int groupIdx = 0; groupIdx < 4; groupIdx++) {
+            int groupNum = groupIdx + 1;
+            List<Team> groupTeams = new ArrayList<>();
+            for (Long teamId : phase2GroupTeamIds.get(groupIdx)) {
+                Team team = teamRepository.findById(teamId).orElseThrow();
+                groupTeams.add(team);
+
+                TournamentTeam tt = new TournamentTeam(tournamentId, teamId, 2, groupNum);
+                tournamentTeamRepository.save(tt);
+
+                Standing standing = new Standing(tournamentId, teamId, 2, groupNum);
+                standingRepository.save(standing);
+            }
+            List<MatchFixture> groupFixtures = fixtureGeneratorService.generateRoundRobinFixtures(tournamentId, groupTeams, 2, groupNum);
+            fixtureRepository.saveAll(groupFixtures);
+        }
+    }
+
+    /**
+     * Fetches Phase 2 standings and pairs the top 4 teams from the 4 groups into 
+     * a 16-team knockout stage (Round of 16).
+     */
+    @Transactional
+    public void generatePhase2Knockout(Long tournamentId) {
+        // Verify all Phase 2 group matches are done
+        long pendingPhase2Groups = fixtureRepository.countByTournamentIdAndPhaseNumberAndRoundAndStatus(
+                tournamentId, 2, MatchFixture.MatchRound.GROUP, MatchFixture.MatchStatus.PENDING);
+
+        if (pendingPhase2Groups > 0) {
+            throw new IllegalStateException(
+                    "Not all Phase 2 group matches are completed. " + pendingPhase2Groups + " matches remaining.");
+        }
+
+        // Guard against duplicate phase 2 knockout generation
+        List<MatchFixture> existingKnockout = fixtureRepository.findByTournamentIdAndPhaseNumberAndRound(
+                tournamentId, 2, MatchFixture.MatchRound.ROUND_OF_16);
+        if (!existingKnockout.isEmpty()) {
+            throw new IllegalStateException("Phase 2 knockout stage has already been generated.");
+        }
+
+        // Fetch standings of the 4 groups in Phase 2
+        List<List<Standing>> standingsByGroup = new ArrayList<>();
+        for (int groupIdx = 0; groupIdx < 4; groupIdx++) {
+            int groupNum = groupIdx + 1;
+            List<Standing> standings = standingRepository
+                    .findByTournamentIdAndPhaseNumberAndGroupNumberOrderByPointsDescGoalDifferenceDescGoalsForDesc(
+                            tournamentId, 2, groupNum);
+            if (standings.size() < 4) {
+                throw new IllegalStateException("Phase 2 Group " + groupNum + " does not have enough teams.");
+            }
+            standingsByGroup.add(standings);
+        }
+
+        // Round of 16 Matchups:
+        // Match 1: G1 Winner (0) vs G4 4th (3)
+        // Match 2: G2 Runner-up (1) vs G3 3rd (2)
+        // Match 3: G3 Winner (0) vs G2 4th (3)
+        // Match 4: G4 Runner-up (1) vs G1 3rd (2)
+        // Match 5: G2 Winner (0) vs G3 4th (3)
+        // Match 6: G1 Runner-up (1) vs G4 3rd (2)
+        // Match 7: G4 Winner (0) vs G1 4th (3)
+        // Match 8: G3 Runner-up (1) vs G2 3rd (2)
+        
+        createAndSaveKnockoutMatch(tournamentId, standingsByGroup.get(0).get(0).getTeamId(), standingsByGroup.get(3).get(3).getTeamId(), 1); // R16-1
+        createAndSaveKnockoutMatch(tournamentId, standingsByGroup.get(1).get(1).getTeamId(), standingsByGroup.get(2).get(2).getTeamId(), 2); // R16-2
+        createAndSaveKnockoutMatch(tournamentId, standingsByGroup.get(2).get(0).getTeamId(), standingsByGroup.get(1).get(3).getTeamId(), 3); // R16-3
+        createAndSaveKnockoutMatch(tournamentId, standingsByGroup.get(3).get(1).getTeamId(), standingsByGroup.get(0).get(2).getTeamId(), 4); // R16-4
+        createAndSaveKnockoutMatch(tournamentId, standingsByGroup.get(1).get(0).getTeamId(), standingsByGroup.get(2).get(3).getTeamId(), 5); // R16-5
+        createAndSaveKnockoutMatch(tournamentId, standingsByGroup.get(0).get(1).getTeamId(), standingsByGroup.get(3).get(2).getTeamId(), 6); // R16-6
+        createAndSaveKnockoutMatch(tournamentId, standingsByGroup.get(3).get(0).getTeamId(), standingsByGroup.get(0).get(3).getTeamId(), 7); // R16-7
+        createAndSaveKnockoutMatch(tournamentId, standingsByGroup.get(2).get(1).getTeamId(), standingsByGroup.get(1).get(2).getTeamId(), 8); // R16-8
+    }
+
+    private void createAndSaveKnockoutMatch(Long tournamentId, Long homeTeamId, Long awayTeamId, int matchNumber) {
+        MatchFixture match = new MatchFixture(tournamentId, homeTeamId, awayTeamId,
+                2, matchNumber, MatchFixture.MatchRound.ROUND_OF_16);
+        fixtureRepository.save(match);
+    }
+
+    /**
+     * Checks progress within a knockout round. If all matches of a round are completed,
+     * it automatically pairs up the winners to generate the next knockout round.
+     */
+    private void checkAndGenerateNextKnockoutRound(Long tournamentId, int phaseNumber, MatchFixture.MatchRound completedRound) {
+        if (completedRound == MatchFixture.MatchRound.ROUND_OF_16) {
+            List<MatchFixture> r16Matches = fixtureRepository.findByTournamentIdAndPhaseNumberAndRound(
+                    tournamentId, phaseNumber, MatchFixture.MatchRound.ROUND_OF_16);
+            
+            boolean allDone = r16Matches.stream().allMatch(m -> m.getStatus() == MatchFixture.MatchStatus.DONE);
+            if (!allDone) return;
+
+            // Guard against duplicate Quarter generation
+            List<MatchFixture> existingQuarters = fixtureRepository.findByTournamentIdAndPhaseNumberAndRound(
+                    tournamentId, phaseNumber, MatchFixture.MatchRound.QUARTER);
+            if (!existingQuarters.isEmpty()) return;
+
+            // Sort R16 matches by groupNumber (match number) to ensure stable matchups
+            r16Matches.sort(Comparator.comparingInt(MatchFixture::getGroupNumber));
+
+            // Quarters pairing:
+            // QF 1: R16-1 Winner vs R16-2 Winner
+            // QF 2: R16-3 Winner vs R16-4 Winner
+            // QF 3: R16-5 Winner vs R16-6 Winner
+            // QF 4: R16-7 Winner vs R16-8 Winner
+            for (int i = 0; i < 4; i++) {
+                Long w1 = getMatchWinner(r16Matches.get(i * 2));
+                Long w2 = getMatchWinner(r16Matches.get(i * 2 + 1));
+                if (w1 == null || w2 == null) {
+                    throw new IllegalStateException("Round of 16 matches must have a clear winner.");
+                }
+                MatchFixture qf = new MatchFixture(tournamentId, w1, w2, phaseNumber, i + 1, MatchFixture.MatchRound.QUARTER);
+                fixtureRepository.save(qf);
+            }
+        } else if (completedRound == MatchFixture.MatchRound.QUARTER) {
+            List<MatchFixture> quarters = fixtureRepository.findByTournamentIdAndPhaseNumberAndRound(
+                    tournamentId, phaseNumber, MatchFixture.MatchRound.QUARTER);
+            
+            boolean allDone = quarters.stream().allMatch(m -> m.getStatus() == MatchFixture.MatchStatus.DONE);
+            if (!allDone) return;
+
+            // Guard against duplicate Semi generation
+            List<MatchFixture> existingSemis = fixtureRepository.findByTournamentIdAndPhaseNumberAndRound(
+                    tournamentId, phaseNumber, MatchFixture.MatchRound.SEMI);
+            if (!existingSemis.isEmpty()) return;
+
+            quarters.sort(Comparator.comparingInt(MatchFixture::getGroupNumber));
+
+            // Semis pairing:
+            // SF 1: QF-1 Winner vs QF-2 Winner
+            // SF 2: QF-3 Winner vs QF-4 Winner
+            for (int i = 0; i < 2; i++) {
+                Long w1 = getMatchWinner(quarters.get(i * 2));
+                Long w2 = getMatchWinner(quarters.get(i * 2 + 1));
+                if (w1 == null || w2 == null) {
+                    throw new IllegalStateException("Quarter-Final matches must have a clear winner.");
+                }
+                MatchFixture sf = new MatchFixture(tournamentId, w1, w2, phaseNumber, i + 1, MatchFixture.MatchRound.SEMI);
+                fixtureRepository.save(sf);
+            }
+        } else if (completedRound == MatchFixture.MatchRound.SEMI) {
+            List<MatchFixture> semis = fixtureRepository.findByTournamentIdAndPhaseNumberAndRound(
+                    tournamentId, phaseNumber, MatchFixture.MatchRound.SEMI);
+            
+            boolean allDone = semis.stream().allMatch(m -> m.getStatus() == MatchFixture.MatchStatus.DONE);
+            if (!allDone) return;
+
+            // Guard against duplicate Final generation
+            List<MatchFixture> existingFinal = fixtureRepository.findByTournamentIdAndPhaseNumberAndRound(
+                    tournamentId, phaseNumber, MatchFixture.MatchRound.FINAL);
+            if (!existingFinal.isEmpty()) return;
+
+            semis.sort(Comparator.comparingInt(MatchFixture::getGroupNumber));
+
+            // Final pairing:
+            // Winner SF-1 vs Winner SF-2
+            Long w1 = getMatchWinner(semis.get(0));
+            Long w2 = getMatchWinner(semis.get(1));
+            if (w1 == null || w2 == null) {
+                throw new IllegalStateException("Semi-Final matches must have a clear winner.");
+            }
+            MatchFixture fMatch = new MatchFixture(tournamentId, w1, w2, phaseNumber, 1, MatchFixture.MatchRound.FINAL);
+            fixtureRepository.save(fMatch);
+        }
     }
 }

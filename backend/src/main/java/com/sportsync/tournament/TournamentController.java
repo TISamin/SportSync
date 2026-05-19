@@ -35,6 +35,12 @@ public class TournamentController {
         return ApiResponse.success(tournament);
     }
 
+    @GetMapping("/{id}")
+    public ApiResponse<TournamentDto> getTournament(@PathVariable Long id) {
+        TournamentDto tournament = tournamentService.getTournament(id);
+        return ApiResponse.success(tournament);
+    }
+
     @GetMapping("/{id}/fixtures")
     public ApiResponse<List<MatchFixtureDto>> getTournamentFixtures(@PathVariable Long id) {
         List<MatchFixtureDto> fixtures = tournamentService.getTournamentFixtures(id);
@@ -49,10 +55,12 @@ public class TournamentController {
     }
 
     @GetMapping("/{id}/standings")
-    public ApiResponse<List<Standing>> getTournamentStandings(@PathVariable Long id) {
-        // Default to phase 1, group 1 for single phase
+    public ApiResponse<List<Standing>> getTournamentStandings(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "1") Integer phase,
+            @RequestParam(defaultValue = "1") Integer group) {
         List<Standing> standings = standingRepository
-                .findByTournamentIdAndPhaseNumberAndGroupNumberOrderByPointsDescGoalDifferenceDescGoalsForDesc(id, 1, 1);
+                .findByTournamentIdAndPhaseNumberAndGroupNumberOrderByPointsDescGoalDifferenceDescGoalsForDesc(id, phase, group);
         return ApiResponse.success(standings);
     }
 
@@ -79,5 +87,18 @@ public class TournamentController {
     public ApiResponse<List<TeamDto>> getTournamentTeams(@PathVariable Long id) {
         List<TeamDto> teams = tournamentService.getTournamentTeams(id);
         return ApiResponse.success(teams);
+    }
+
+    @PostMapping("/{id}/generate-phase2")
+    public ApiResponse<Void> generatePhase2(@PathVariable Long id) {
+        tournamentService.generatePhase2(id);
+        return ApiResponse.success(null);
+    }
+
+    @PostMapping("/{id}/generate-phase2-knockout")
+    public ApiResponse<List<MatchFixtureDto>> generatePhase2Knockout(@PathVariable Long id) {
+        tournamentService.generatePhase2Knockout(id);
+        List<MatchFixtureDto> knockoutFixtures = tournamentService.getKnockoutFixtures(id);
+        return ApiResponse.success(knockoutFixtures);
     }
 }

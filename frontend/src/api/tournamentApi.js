@@ -7,6 +7,11 @@ export const createTournament = async (name, type, teamIds) => {
     return response.data;
 };
 
+export const getTournament = async (id) => {
+    const response = await axios.get(`${API_URL}/${id}`);
+    return response.data;
+};
+
 export const getTournamentFixtures = async (id) => {
     const response = await axios.get(`${API_URL}/${id}/fixtures`);
     return response.data;
@@ -21,8 +26,10 @@ export const saveMatchResult = async (id, matchId, homeScore, awayScore, events)
     return response.data;
 };
 
-export const getTournamentStandings = async (id) => {
-    const response = await axios.get(`${API_URL}/${id}/standings`);
+export const getTournamentStandings = async (id, phase = 1, group = 1) => {
+    const response = await axios.get(`${API_URL}/${id}/standings`, {
+        params: { phase, group }
+    });
     return response.data;
 };
 
@@ -53,5 +60,15 @@ export const getTopAssisters = async (id) => {
 
 export const getTournamentTeams = async (id) => {
     const response = await axios.get(`${API_URL}/${id}/teams`);
+    return response.data;
+};
+
+export const generatePhase2 = async (id) => {
+    const response = await axios.post(`${API_URL}/${id}/generate-phase2`);
+    return response.data;
+};
+
+export const generatePhase2Knockout = async (id) => {
+    const response = await axios.post(`${API_URL}/${id}/generate-phase2-knockout`);
     return response.data;
 };

@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
+    getTournament,
     getTournamentFixtures,
     getTournamentStandings,
     getKnockoutFixtures,
     getTopScorers,
     getTopAssisters,
-    getTournamentTeams
+    getTournamentTeams,
+    generatePhase2
 } from '../api/tournamentApi';
 import MatchResultModal from '../components/MatchResultModal';
 import KnockoutBracket from '../components/KnockoutBracket';
@@ -16,6 +18,7 @@ export default function TournamentDashboard() {
     const { id } = useParams();
     const navigate = useNavigate();
 
+    const [tournament, setTournament] = useState(null);
     const [activeTab, setActiveTab] = useState('standings');
     const [fixtures, setFixtures] = useState([]);
     const [standings, setStandings] = useState([]);
@@ -24,19 +27,44 @@ export default function TournamentDashboard() {
     const [topAssisters, setTopAssisters] = useState([]);
     const [teams, setTeams] = useState([]);
 
+    // Double Phase Selectors
+    const [selectedPhase, setSelectedPhase] = useState(1);
+    const [selectedGroup, setSelectedGroup] = useState(1);
+
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedFixture, setSelectedFixture] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
-    // For now, since there's no auth, let the user toggle Admin view easily for testing/operations
     const [isAdmin, setIsAdmin] = useState(true);
+    const [generatingPhase2Loading, setGeneratingPhase2Loading] = useState(false);
+
+    const fetchMetadata = async () => {
+        try {
+            const res = await getTournament(id);
+            if (res.success) {
+                setTournament(res.data);
+            }
+        } catch (err) {
+            console.error('Error fetching tournament metadata', err);
+        }
+    };
+
+    const fetchStandingsData = async (phase, group) => {
+        try {
+            const res = await getTournamentStandings(id, phase, group);
+            if (res.success) {
+                setStandings(res.data);
+            }
+        } catch (err) {
+            console.error('Error fetching standings', err);
+        }
+    };
 
     const refreshData = async () => {
         try {
-            const [fixRes, standRes, koRes, scorersRes, assistersRes, teamsRes] = await Promise.all([
+            const [fixRes, koRes, scorersRes, assistersRes, teamsRes] = await Promise.all([
                 getTournamentFixtures(id),
-                getTournamentStandings(id),
                 getKnockoutFixtures(id),
                 getTopScorers(id),
                 getTopAssisters(id),
@@ -44,11 +72,13 @@ export default function TournamentDashboard() {
             ]);
 
             if (fixRes.success) setFixtures(fixRes.data);
-            if (standRes.success) setStandings(standRes.data);
             if (koRes.success) setKnockouts(koRes.data);
             if (scorersRes.success) setTopScorers(scorersRes.data);
             if (assistersRes.success) setTopAssisters(assistersRes.data);
             if (teamsRes.success) setTeams(teamsRes.data);
+
+            await fetchMetadata();
+            await fetchStandingsData(selectedPhase, selectedGroup);
         } catch (err) {
             setError('Failed to fetch tournament data.');
         } finally {
@@ -60,25 +90,70 @@ export default function TournamentDashboard() {
         refreshData();
     }, [id]);
 
+    // Re-fetch standings whenever selectedPhase or selectedGroup changes
+    useEffect(() => {
+        if (tournament) {
+            fetchStandingsData(selectedPhase, selectedGroup);
+        }
+    }, [selectedPhase, selectedGroup]);
+
+    const handleGeneratePhase2 = async () => {
+        setGeneratingPhase2Loading(true);
+        try {
+            const res = await generatePhase2(id);
+            if (res.success) {
+                setSelectedPhase(2);
+                setSelectedGroup(1);
+                await refreshData();
+            } else {
+                alert(res.error || 'Failed to generate Phase 2 groups.');
+            }
+        } catch (err) {
+            alert(err.response?.data?.error || 'Failed to generate Phase 2. Ensure all Phase 1 matches are done.');
+        } finally {
+            setGeneratingPhase2Loading(false);
+        }
+    };
+
     if (loading) {
         return <div className="min-h-screen bg-black flex items-center justify-center text-white text-lg">Loading...</div>;
     }
 
-    if (error) {
+    if (error || !tournament) {
         return (
             <div className="min-h-screen bg-black flex items-center justify-center text-red-500 p-6 text-center">
                 <div>
                     <h2 className="text-2xl font-black mb-4">Error</h2>
-                    <p className="mb-6">{error}</p>
+                    <p className="mb-6">{error || 'Tournament not found.'}</p>
                     <button onClick={() => navigate('/')} className="bg-indigo-600 px-6 py-2 rounded font-bold uppercase">Go Home</button>
                 </div>
             </div>
         );
     }
 
+    const isDouble = tournament.type === 'DOUBLE';
+    
+    // Check stages progression
+    const hasPhase2Fixtures = fixtures.some(f => f.phaseNumber === 2);
+    const pendingPhase1Count = fixtures.filter(f => f.phaseNumber === 1 && f.round === 'GROUP' && f.status === 'PENDING').length;
+    const pendingPhase2Count = fixtures.filter(f => f.phaseNumber === 2 && f.round === 'GROUP' && f.status === 'PENDING').length;
+
     // A tournament is done if the final match exists and is completed
     const finalMatch = knockouts.find(k => k.round === 'FINAL');
     const isTournamentComplete = finalMatch && finalMatch.status === 'DONE';
+
+    // Phase 1 Group Label mapping
+    const getGroupLabel = (groupNum, phase) => {
+        if (phase === 1 && isDouble) {
+            return `Group ${String.fromCharCode(64 + groupNum)}`; // Group A to H
+        }
+        return `Group ${groupNum}`;
+    };
+
+    // Filter fixtures based on active phase and group tabs
+    const filteredFixtures = fixtures.filter(
+        f => f.phaseNumber === selectedPhase && f.groupNumber === selectedGroup && f.round === 'GROUP'
+    );
 
     return (
         <div className="min-h-screen bg-black text-white p-6">
@@ -88,7 +163,9 @@ export default function TournamentDashboard() {
                     <h1 className="text-3xl font-black tracking-widest uppercase">
                         Sport<span className="text-indigo-500">Sync</span> Tournament
                     </h1>
-                    <p className="text-gray-400 text-sm mt-1">Tournament ID: <span className="text-indigo-400 font-mono font-bold">{id}</span></p>
+                    <p className="text-gray-400 text-sm mt-1">
+                        Name: <span className="text-white font-bold">{tournament.name}</span> | Type: <span className="text-indigo-400 font-bold font-mono">{tournament.type}</span>
+                    </p>
                 </div>
 
                 <div className="flex items-center space-x-4">
@@ -110,6 +187,23 @@ export default function TournamentDashboard() {
                     </button>
                 </div>
             </header>
+
+            {/* Manual Action banners for Double Phase flow */}
+            {isDouble && isAdmin && !hasPhase2Fixtures && pendingPhase1Count === 0 && (
+                <div className="mb-8 bg-gradient-to-r from-indigo-950 via-indigo-900 to-indigo-950 border border-indigo-500/40 rounded-2xl p-6 flex flex-col sm:flex-row justify-between items-center gap-4 shadow-xl">
+                    <div>
+                        <h3 className="text-lg font-bold text-white uppercase tracking-wider">Phase 1 Finished!</h3>
+                        <p className="text-xs text-indigo-200">All 224 matches of the first phase are complete. Generate Phase 2 groups.</p>
+                    </div>
+                    <button
+                        onClick={handleGeneratePhase2}
+                        disabled={generatingPhase2Loading}
+                        className="bg-indigo-600 hover:bg-indigo-500 text-white font-black px-6 py-3 rounded-lg text-xs uppercase tracking-widest transition-all"
+                    >
+                        {generatingPhase2Loading ? 'Generating...' : 'Generate Phase 2 Groups'}
+                    </button>
+                </div>
+            )}
 
             {/* Complete Tournament Summary View */}
             {isTournamentComplete && (
@@ -135,11 +229,83 @@ export default function TournamentDashboard() {
                 ))}
             </div>
 
+            {/* Phase / Group Selectors (Only shown for standings and fixtures tabs) */}
+            {(activeTab === 'standings' || activeTab === 'fixtures') && (
+                <div className="bg-gray-900/30 border border-gray-850 p-5 rounded-2xl mb-8 space-y-4">
+                    {/* Phase Selector */}
+                    {isDouble && (
+                        <div className="flex items-center space-x-4">
+                            <span className="text-xs text-gray-500 font-bold uppercase tracking-wider min-w-[60px]">Phase:</span>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => {
+                                        setSelectedPhase(1);
+                                        setSelectedGroup(1);
+                                    }}
+                                    className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all border ${
+                                        selectedPhase === 1
+                                            ? 'bg-indigo-600/10 border-indigo-500 text-white'
+                                            : 'bg-gray-900 border-gray-800 text-gray-400 hover:text-gray-300'
+                                    }`}
+                                >
+                                    Phase 1 (Groups A-H)
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        if (!hasPhase2Fixtures) {
+                                            alert('Phase 2 has not been generated yet. Finish Phase 1 matches first.');
+                                            return;
+                                        }
+                                        setSelectedPhase(2);
+                                        setSelectedGroup(1);
+                                    }}
+                                    disabled={!hasPhase2Fixtures}
+                                    className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all border ${
+                                        !hasPhase2Fixtures 
+                                            ? 'opacity-40 cursor-not-allowed bg-gray-900 border-gray-800 text-gray-600'
+                                            : selectedPhase === 2
+                                                ? 'bg-indigo-600/10 border-indigo-500 text-white'
+                                                : 'bg-gray-900 border-gray-800 text-gray-400 hover:text-gray-300'
+                                    }`}
+                                >
+                                    Phase 2 (Groups 1-4)
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Group Selector */}
+                    <div className="flex items-center space-x-4 overflow-x-auto">
+                        <span className="text-xs text-gray-500 font-bold uppercase tracking-wider min-w-[60px]">Group:</span>
+                        <div className="flex gap-1.5">
+                            {Array.from({ length: selectedPhase === 1 && isDouble ? 8 : (selectedPhase === 2 ? 4 : 1) }).map((_, idx) => {
+                                const groupNum = idx + 1;
+                                return (
+                                    <button
+                                        key={groupNum}
+                                        onClick={() => setSelectedGroup(groupNum)}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
+                                            selectedGroup === groupNum
+                                                ? 'bg-indigo-600 border-transparent text-white shadow-md'
+                                                : 'bg-gray-900 border-gray-800 text-gray-400 hover:border-gray-700'
+                                        }`}
+                                    >
+                                        {getGroupLabel(groupNum, selectedPhase)}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Tab Contents */}
             <div className="space-y-6">
                 {activeTab === 'standings' && (
                     <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-lg">
-                        <h3 className="text-xl font-black uppercase tracking-wider mb-4 border-b border-gray-800 pb-3">Standings</h3>
+                        <h3 className="text-xl font-black uppercase tracking-wider mb-4 border-b border-gray-800 pb-3">
+                            Standings — {getGroupLabel(selectedGroup, selectedPhase)}
+                        </h3>
                         <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse">
                                 <thead>
@@ -178,6 +344,11 @@ export default function TournamentDashboard() {
                                             </tr>
                                         );
                                     })}
+                                    {standings.length === 0 && (
+                                        <tr>
+                                            <td colSpan="10" className="text-center py-8 text-gray-500 font-medium">No standings found for this group.</td>
+                                        </tr>
+                                    )}
                                 </tbody>
                             </table>
                         </div>
@@ -186,13 +357,15 @@ export default function TournamentDashboard() {
 
                 {activeTab === 'fixtures' && (
                     <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-lg">
-                        <h3 className="text-xl font-black uppercase tracking-wider mb-4 border-b border-gray-800 pb-3">Fixtures</h3>
+                        <h3 className="text-xl font-black uppercase tracking-wider mb-4 border-b border-gray-800 pb-3">
+                            Fixtures — {getGroupLabel(selectedGroup, selectedPhase)}
+                        </h3>
                         
-                        {fixtures.filter(f => f.round === 'GROUP').length === 0 ? (
-                            <p className="text-gray-500 text-center py-8">No group stage fixtures found.</p>
+                        {filteredFixtures.length === 0 ? (
+                            <p className="text-gray-500 text-center py-8">No group stage fixtures found for this group.</p>
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {fixtures.filter(f => f.round === 'GROUP').map(fixture => (
+                                {filteredFixtures.map(fixture => (
                                     <div key={fixture.id} className="bg-gray-800/35 border border-gray-800 rounded-xl p-4 flex justify-between items-center">
                                         <div className="flex-1 space-y-1">
                                             <div className="flex justify-between items-center text-sm">
@@ -250,6 +423,7 @@ export default function TournamentDashboard() {
                         fixtures={knockouts}
                         isAdmin={isAdmin}
                         tournamentId={id}
+                        tournamentType={tournament.type}
                         onRefresh={refreshData}
                         onEnterResult={(fixture) => {
                             setSelectedFixture(fixture);
