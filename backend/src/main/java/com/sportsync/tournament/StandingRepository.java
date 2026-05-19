@@ -15,4 +15,6 @@ public interface StandingRepository extends JpaRepository<Standing, Long> {
     List<Standing> findByTournamentIdAndPhaseNumberAndGroupNumberOrderByPointsDescGoalDifferenceDescGoalsForDesc(@org.springframework.data.repository.query.Param("tournamentId") Long tournamentId, @org.springframework.data.repository.query.Param("phaseNumber") Integer phaseNumber, @org.springframework.data.repository.query.Param("groupNumber") Integer groupNumber);
     
     Optional<Standing> findByTournamentIdAndTeamIdAndPhaseNumberAndGroupNumber(Long tournamentId, Long teamId, Integer phaseNumber, Integer groupNumber);
+
+    Optional<Standing> findFirstByTournamentIdAndTeamIdAndPhaseNumber(Long tournamentId, Long teamId, Integer phaseNumber);
 }

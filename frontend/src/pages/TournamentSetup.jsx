@@ -17,11 +17,22 @@ export default function TournamentSetup() {
     const [fetchingTeams, setFetchingTeams] = useState(false);
     const [error, setError] = useState('');
 
+    const requiredCount = tournamentType === 'SINGLE' ? 8 : 64;
+
     useEffect(() => {
         if (initialRoomCode) {
             fetchTeams(initialRoomCode);
         }
     }, [initialRoomCode]);
+
+    // Whenever tournamentType changes, clear or pre-fill selections based on target count
+    useEffect(() => {
+        if (teams.length === requiredCount) {
+            setSelectedTeamIds(teams.map(t => t.id));
+        } else {
+            setSelectedTeamIds([]);
+        }
+    }, [tournamentType, teams]);
 
     const fetchTeams = async (code) => {
         if (!code) return;
@@ -31,12 +42,6 @@ export default function TournamentSetup() {
             const res = await getRoomTeams(code);
             if (res.success) {
                 setTeams(res.data);
-                // Pre-select all teams if there are exactly 8
-                if (res.data.length === 8) {
-                    setSelectedTeamIds(res.data.map(t => t.id));
-                } else {
-                    setSelectedTeamIds([]);
-                }
             } else {
                 setError(res.error || 'Failed to fetch teams. Verify room code.');
                 setTeams([]);
@@ -58,6 +63,10 @@ export default function TournamentSetup() {
         if (selectedTeamIds.includes(teamId)) {
             setSelectedTeamIds(selectedTeamIds.filter(id => id !== teamId));
         } else {
+            if (selectedTeamIds.length >= requiredCount) {
+                alert(`You can only select up to ${requiredCount} teams.`);
+                return;
+            }
             setSelectedTeamIds([...selectedTeamIds, teamId]);
         }
     };
@@ -71,8 +80,8 @@ export default function TournamentSetup() {
             return;
         }
 
-        if (selectedTeamIds.length !== 8) {
-            setError('You must select exactly 8 teams to start a tournament.');
+        if (selectedTeamIds.length !== requiredCount) {
+            setError(`You must select exactly ${requiredCount} teams to start this tournament.`);
             return;
         }
 
@@ -175,11 +184,11 @@ export default function TournamentSetup() {
                         <div>
                             <div className="flex justify-between items-center mb-2">
                                 <label className="text-gray-400 text-xs font-bold uppercase tracking-widest">
-                                    Select Teams ({selectedTeamIds.length} / 8)
+                                    Select Teams ({selectedTeamIds.length} / {requiredCount})
                                 </label>
-                                {teams.length !== 8 && (
+                                {teams.length !== requiredCount && (
                                     <span className="text-xs text-yellow-500 font-semibold">
-                                        Must select exactly 8 teams
+                                        Must select exactly {requiredCount} teams
                                     </span>
                                 )}
                             </div>
@@ -212,7 +221,7 @@ export default function TournamentSetup() {
 
                         <button
                             type="submit"
-                            disabled={loading || selectedTeamIds.length !== 8}
+                            disabled={loading || selectedTeamIds.length !== requiredCount}
                             className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-800 disabled:text-gray-600 text-white font-black uppercase tracking-widest py-4 rounded-lg transition-all"
                         >
                             {loading ? 'Creating...' : 'Start Tournament'}
