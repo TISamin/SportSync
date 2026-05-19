@@ -12,6 +12,7 @@ export const useAuctionStore = create((set) => ({
     leadingTeam: null,
     timeRemaining: 30,
     teams: [],
+    categoryCounts: {},
     isFinished: false,
     statusMessage: 'Waiting for auction to start...',
 
@@ -25,6 +26,7 @@ export const useAuctionStore = create((set) => ({
         leadingTeam: stateUpdate.leadingTeam !== undefined ? stateUpdate.leadingTeam : state.leadingTeam,
         timeRemaining: stateUpdate.timeRemaining !== undefined ? stateUpdate.timeRemaining : state.timeRemaining,
         teams: stateUpdate.teams || state.teams,
+        categoryCounts: stateUpdate.categoryCounts || state.categoryCounts,
         isFinished: stateUpdate.isFinished !== undefined ? stateUpdate.isFinished : state.isFinished,
         statusMessage: stateUpdate.statusMessage || state.statusMessage,
     })),
@@ -32,6 +34,6 @@ export const useAuctionStore = create((set) => ({
     reset: () => set({
         roomCode: null, roomId: null, myTeamId: null, isAdmin: false,
         currentPlayer: null, currentBid: 0, leadingTeam: null, timeRemaining: 30,
-        teams: [], isFinished: false, statusMessage: 'Waiting for auction to start...'
+        teams: [], categoryCounts: {}, isFinished: false, statusMessage: 'Waiting for auction to start...'
     })
 }));

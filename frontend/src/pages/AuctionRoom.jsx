@@ -13,12 +13,23 @@ export default function AuctionRoom() {
     const navigate = useNavigate();
     const isRoomAdminRoute = window.location.pathname.startsWith('/admin');
     
-    const { roomCode: storeCode, isAdmin, myTeamId, setRoomInfo, setMyTeamId, statusMessage, isFinished, currentPlayer } = useAuctionStore();
+    const { roomCode: storeCode, isAdmin, myTeamId, setRoomInfo, setMyTeamId, statusMessage, isFinished, currentPlayer, teams, categoryCounts } = useAuctionStore();
     const { connected, startAuction, nextPlayer, placeBid } = useAuctionSocket(storeCode);
+
+    const myTeam = teams.find(t => t.id === myTeamId);
+    const myRoster = myTeam ? (myTeam.roster || []) : [];
     
+    const [copied, setCopied] = useState(false);
     const [joinForm, setJoinForm] = useState({ teamName: '', ownerName: '' });
     const [joinError, setJoinError] = useState('');
     const [loading, setLoading] = useState(true);
+
+    const joinLink = `${window.location.origin}/auction/${roomCode}`;
+    const handleCopyLink = () => {
+        navigator.clipboard.writeText(joinLink);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
 
     // Initial load and verification
     useEffect(() => {
@@ -99,7 +110,21 @@ export default function AuctionRoom() {
                     <h1 className="text-3xl font-black text-white tracking-widest uppercase">
                         Sport<span className="text-indigo-500">Sync</span> Auction
                     </h1>
-                    <p className="text-gray-400 text-sm mt-1">Room Code: <span className="text-indigo-400 font-mono font-bold">{roomCode}</span></p>
+                    <div className="flex flex-wrap items-center gap-4 mt-2">
+                        <p className="text-gray-400 text-sm">Room Code: <span className="text-indigo-400 font-mono font-bold">{roomCode}</span></p>
+                        {isAdmin && (
+                            <div className="flex items-center space-x-2 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-xs">
+                                <span className="text-gray-400 font-bold uppercase tracking-wider">Captain Link:</span>
+                                <span className="text-indigo-300 font-mono select-all">{joinLink}</span>
+                                <button 
+                                    onClick={handleCopyLink}
+                                    className="bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-bold px-2 py-0.5 rounded transition-all"
+                                >
+                                    {copied ? 'Copied!' : 'Copy Link'}
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </div>
                 
                 <div className="flex items-center space-x-4">
@@ -149,10 +174,91 @@ export default function AuctionRoom() {
                             )}
                         </div>
                     </div>
+
+                    {/* My Roster section (Only for captains who have joined a team) */}
+                    {!isAdmin && myTeamId && (
+                        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 shadow-lg">
+                            <div className="flex justify-between items-center mb-4 border-b border-gray-800 pb-3">
+                                <h3 className="text-white font-black text-lg uppercase tracking-widest">My Acquired Players</h3>
+                                <span className="text-xs bg-green-500/10 text-green-400 border border-green-500/20 px-3 py-1 rounded-full font-bold">
+                                    {myRoster.length} Players Drafted
+                                </span>
+                            </div>
+
+                            {myRoster.length === 0 ? (
+                                <div className="text-center py-8 text-gray-500 font-medium">
+                                    You haven't bought any players yet. Start bidding!
+                                </div>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left border-collapse">
+                                        <thead>
+                                            <tr className="border-b border-gray-800 text-xs text-gray-400 font-bold uppercase tracking-wider">
+                                                <th className="py-3 px-4">Player</th>
+                                                <th className="py-3 px-4">Role</th>
+                                                <th className="py-3 px-4">Category</th>
+                                                <th className="py-3 px-4 text-right">Acquired Price</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-800/50">
+                                            {myRoster.map((player) => (
+                                                <tr key={player.id} className="hover:bg-gray-800/30 transition-colors">
+                                                    <td className="py-3.5 px-4">
+                                                        <div className="flex items-center space-x-3">
+                                                            {player.imageUrl ? (
+                                                                <img src={player.imageUrl} alt={player.name} className="w-8 h-8 rounded-full object-cover border border-gray-700" />
+                                                            ) : (
+                                                                <div className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center text-xs font-bold text-gray-400 border border-gray-700">
+                                                                    #{player.playerNumber || '?'}
+                                                                </div>
+                                                            )}
+                                                            <div>
+                                                                <p className="text-white font-bold text-sm">{player.name}</p>
+                                                                <p className="text-gray-400 text-xs">No. {player.playerNumber || 'N/A'}</p>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="py-3.5 px-4">
+                                                        <p className="text-gray-300 text-sm font-medium">{player.role}</p>
+                                                        <p className="text-gray-500 text-xs">{player.style}</p>
+                                                    </td>
+                                                    <td className="py-3.5 px-4">
+                                                        <span className="text-xs bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 px-2 py-0.5 rounded font-mono font-bold uppercase">
+                                                            {player.category}
+                                                        </span>
+                                                    </td>
+                                                    <td className="py-3.5 px-4 text-right">
+                                                        <span className="text-green-400 font-black text-sm">
+                                                            ${player.soldPrice?.toLocaleString() || player.basePrice?.toLocaleString()}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
 
-                {/* Right Column - Roster */}
-                <div>
+                {/* Right Column - Category Tracker and Roster */}
+                <div className="space-y-6">
+                    {/* Category Tracker */}
+                    {Object.keys(categoryCounts || {}).length > 0 && (
+                        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 shadow-lg">
+                            <h3 className="text-white font-black text-lg mb-4 uppercase tracking-widest border-b border-gray-800 pb-3">Category Tracker</h3>
+                            <div className="grid grid-cols-2 gap-3">
+                                {Object.entries(categoryCounts).map(([cat, count]) => (
+                                    <div key={cat} className="bg-gray-800 border border-gray-700/50 rounded-lg p-3 flex justify-between items-center">
+                                        <span className="text-xs bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 px-2.5 py-1 rounded-md font-mono font-bold uppercase">{cat}</span>
+                                        <span className="text-xl font-black text-white">{count} left</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     <TeamRoster />
                 </div>
             </div>

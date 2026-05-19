@@ -7,13 +7,16 @@ export default function BidPanel({ onBid }) {
 
     const isLeading = leadingTeam && leadingTeam.id === myTeamId;
     
-    // Calculate required bid
+    // Calculate required bid: first bid starts at base price, subsequent bids increment by 10% of base price
+    const basePrice = currentPlayer.basePrice || 0;
+    const increment = Math.max(10, Math.round(basePrice * 0.10));
+    
     let requiredBid = currentBid;
     if (leadingTeam) {
-        requiredBid += 10;
+        requiredBid += increment;
     } else {
         if (requiredBid === 0) {
-            requiredBid = 10; // min bid if base price is 0
+            requiredBid = increment; // min bid if base price is 0
         }
     }
 
