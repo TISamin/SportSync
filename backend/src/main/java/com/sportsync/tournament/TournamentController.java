@@ -5,6 +5,7 @@ import com.sportsync.dto.CreateTournamentRequest;
 import com.sportsync.dto.MatchFixtureDto;
 import com.sportsync.dto.MatchResultRequest;
 import com.sportsync.dto.TournamentDto;
+import com.sportsync.dto.TournamentResultDto;
 import com.sportsync.domain.Standing;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
@@ -65,5 +66,11 @@ public class TournamentController {
     public ApiResponse<List<MatchFixtureDto>> getKnockoutFixtures(@PathVariable Long id) {
         List<MatchFixtureDto> fixtures = tournamentService.getKnockoutFixtures(id);
         return ApiResponse.success(fixtures);
+    }
+
+    @GetMapping("/{id}/result")
+    public ApiResponse<TournamentResultDto> getTournamentResult(@PathVariable Long id) {
+        TournamentResultDto result = tournamentService.getTournamentResult(id);
+        return ApiResponse.success(result);
     }
 }

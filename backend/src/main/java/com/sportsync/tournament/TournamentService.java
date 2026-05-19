@@ -1,9 +1,9 @@
 package com.sportsync.tournament;
 
 import com.sportsync.domain.*;
-import com.sportsync.dto.MatchFixtureDto;
-import com.sportsync.dto.TournamentDto;
+import com.sportsync.dto.*;
 import com.sportsync.team.TeamRepository;
+import com.sportsync.stats.StatsService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +22,8 @@ public class TournamentService {
     private final FixtureGeneratorService fixtureGeneratorService;
     private final com.sportsync.stats.MatchEventRepository matchEventRepository;
     private final StandingsService standingsService;
+    private final TournamentResultRepository tournamentResultRepository;
+    private final StatsService statsService;
 
     public TournamentService(TournamentRepository tournamentRepository,
                              TournamentTeamRepository tournamentTeamRepository,
@@ -30,7 +32,9 @@ public class TournamentService {
                              TeamRepository teamRepository,
                              FixtureGeneratorService fixtureGeneratorService,
                              com.sportsync.stats.MatchEventRepository matchEventRepository,
-                             StandingsService standingsService) {
+                             StandingsService standingsService,
+                             TournamentResultRepository tournamentResultRepository,
+                             StatsService statsService) {
         this.tournamentRepository = tournamentRepository;
         this.tournamentTeamRepository = tournamentTeamRepository;
         this.fixtureRepository = fixtureRepository;
@@ -39,6 +43,8 @@ public class TournamentService {
         this.fixtureGeneratorService = fixtureGeneratorService;
         this.matchEventRepository = matchEventRepository;
         this.standingsService = standingsService;
+        this.tournamentResultRepository = tournamentResultRepository;
+        this.statsService = statsService;
     }
 
     @Transactional
@@ -86,7 +92,7 @@ public class TournamentService {
     }
 
     @Transactional
-    public void saveMatchResult(Long tournamentId, Long matchId, com.sportsync.dto.MatchResultRequest request) {
+    public void saveMatchResult(Long tournamentId, Long matchId, MatchResultRequest request) {
         MatchFixture match = fixtureRepository.findById(matchId)
                 .orElseThrow(() -> new IllegalArgumentException("Match not found"));
                 
@@ -113,7 +119,7 @@ public class TournamentService {
         fixtureRepository.save(match);
 
         if (request.getEvents() != null) {
-            for (com.sportsync.dto.MatchEventRequest eventReq : request.getEvents()) {
+            for (MatchEventRequest eventReq : request.getEvents()) {
                 MatchEvent event = new MatchEvent(matchId, eventReq.getPlayerId(), eventReq.getTeamId(), 
                                                   eventReq.getEventType(), eventReq.getMinute());
                 matchEventRepository.save(event);
@@ -139,6 +145,11 @@ public class TournamentService {
         // After a semi-final, check if both semis are done → auto-generate final fixture
         if (match.getRound() == MatchFixture.MatchRound.SEMI) {
             checkAndGenerateFinal(tournamentId, match.getPhaseNumber(), match.getGroupNumber());
+        }
+
+        // After a final, check if final is done → save tournament result and set status to DONE
+        if (match.getRound() == MatchFixture.MatchRound.FINAL) {
+            completeTournament(tournamentId, match.getPhaseNumber(), match.getGroupNumber(), match);
         }
     }
 
@@ -271,5 +282,119 @@ public class TournamentService {
                 tournamentId, phaseNumber, groupNumber,
                 MatchFixture.MatchRound.GROUP, MatchFixture.MatchStatus.PENDING);
         return pending == 0;
+    }
+
+    /**
+     * Saves the final tournament statistics and marks tournament status as DONE.
+     */
+    @Transactional
+    public void completeTournament(Long tournamentId, int phaseNumber, int groupNumber, MatchFixture finalMatch) {
+        Tournament tournament = tournamentRepository.findById(tournamentId)
+                .orElseThrow(() -> new IllegalArgumentException("Tournament not found"));
+
+        if (tournament.getStatus() == Tournament.TournamentStatus.DONE) {
+            return;
+        }
+
+        // 1. Determine winner and runner up
+        Long winnerId = getMatchWinner(finalMatch);
+        if (winnerId == null) {
+            throw new IllegalStateException("Final match must have a clear winner.");
+        }
+        Long runnerUpId = winnerId.equals(finalMatch.getHomeTeamId()) ? finalMatch.getAwayTeamId() : finalMatch.getHomeTeamId();
+
+        // 2. Determine second runner up (losing semifinalist with more points/better GD/better GF in standings)
+        List<MatchFixture> semis = fixtureRepository.findByTournamentIdAndPhaseNumberAndRound(
+                tournamentId, phaseNumber, MatchFixture.MatchRound.SEMI);
+
+        if (semis.size() < 2) {
+            throw new IllegalStateException("Could not find both semi-final matches.");
+        }
+
+        Long semi1Winner = getMatchWinner(semis.get(0));
+        Long semi2Winner = getMatchWinner(semis.get(1));
+
+        if (semi1Winner == null || semi2Winner == null) {
+            throw new IllegalStateException("Both semi-final matches must have a clear winner.");
+        }
+
+        Long semi1Loser = semi1Winner.equals(semis.get(0).getHomeTeamId()) ? semis.get(0).getAwayTeamId() : semis.get(0).getHomeTeamId();
+        Long semi2Loser = semi2Winner.equals(semis.get(1).getHomeTeamId()) ? semis.get(1).getAwayTeamId() : semis.get(1).getHomeTeamId();
+
+        Standing standing1 = standingRepository.findByTournamentIdAndTeamIdAndPhaseNumberAndGroupNumber(
+                tournamentId, semi1Loser, phaseNumber, groupNumber)
+                .orElseThrow(() -> new IllegalStateException("Standing not found for team: " + semi1Loser));
+        Standing standing2 = standingRepository.findByTournamentIdAndTeamIdAndPhaseNumberAndGroupNumber(
+                tournamentId, semi2Loser, phaseNumber, groupNumber)
+                .orElseThrow(() -> new IllegalStateException("Standing not found for team: " + semi2Loser));
+
+        Long secondRunnerId;
+        if (standing1.getPoints() > standing2.getPoints()) {
+            secondRunnerId = semi1Loser;
+        } else if (standing2.getPoints() > standing1.getPoints()) {
+            secondRunnerId = semi2Loser;
+        } else {
+            int gd1 = standing1.getGoalDifference();
+            int gd2 = standing2.getGoalDifference();
+            if (gd1 > gd2) {
+                secondRunnerId = semi1Loser;
+            } else if (gd2 > gd1) {
+                secondRunnerId = semi2Loser;
+            } else {
+                if (standing1.getGoalsFor() > standing2.getGoalsFor()) {
+                    secondRunnerId = semi1Loser;
+                } else if (standing2.getGoalsFor() > standing1.getGoalsFor()) {
+                    secondRunnerId = semi2Loser;
+                } else {
+                    secondRunnerId = semi1Loser; // Fallback
+                }
+            }
+        }
+
+        // 3. Determine top scorer and top assister
+        List<PlayerStatDto> topScorers = statsService.getTopStats(tournamentId, MatchEvent.EventType.GOAL);
+        Long topScorerId = topScorers.isEmpty() ? null : topScorers.get(0).getPlayerId();
+
+        List<PlayerStatDto> topAssisters = statsService.getTopStats(tournamentId, MatchEvent.EventType.ASSIST);
+        Long topAssisterId = topAssisters.isEmpty() ? null : topAssisters.get(0).getPlayerId();
+
+        // 4. Save results
+        TournamentResult result = new TournamentResult();
+        result.setTournamentId(tournamentId);
+        result.setWinnerTeamId(winnerId);
+        result.setRunnerUpTeamId(runnerUpId);
+        result.setSecondRunnerId(secondRunnerId);
+        result.setTopScorerId(topScorerId);
+        result.setTopAssisterId(topAssisterId);
+        tournamentResultRepository.save(result);
+
+        // 5. Update tournament status
+        tournament.setStatus(Tournament.TournamentStatus.DONE);
+        tournamentRepository.save(tournament);
+    }
+
+    /**
+     * Retrieves the saved tournament results mapped to a DTO.
+     */
+    @Transactional(readOnly = true)
+    public TournamentResultDto getTournamentResult(Long tournamentId) {
+        TournamentResult result = tournamentResultRepository.findByTournamentId(tournamentId)
+                .orElseThrow(() -> new IllegalStateException("Tournament results are not generated yet. Ensure the tournament is complete."));
+
+        Team winner = teamRepository.findById(result.getWinnerTeamId()).orElse(null);
+        Team runnerUp = teamRepository.findById(result.getRunnerUpTeamId()).orElse(null);
+        Team secondRunner = teamRepository.findById(result.getSecondRunnerId()).orElse(null);
+
+        TeamDto winnerDto = winner != null ? new TeamDto(winner) : null;
+        TeamDto runnerUpDto = runnerUp != null ? new TeamDto(runnerUp) : null;
+        TeamDto secondRunnerDto = secondRunner != null ? new TeamDto(secondRunner) : null;
+
+        List<PlayerStatDto> topScorers = statsService.getTopStats(tournamentId, MatchEvent.EventType.GOAL);
+        PlayerStatDto topScorerDto = topScorers.isEmpty() ? null : topScorers.get(0);
+
+        List<PlayerStatDto> topAssisters = statsService.getTopStats(tournamentId, MatchEvent.EventType.ASSIST);
+        PlayerStatDto topAssisterDto = topAssisters.isEmpty() ? null : topAssisters.get(0);
+
+        return new TournamentResultDto(winnerDto, runnerUpDto, secondRunnerDto, topScorerDto, topAssisterDto);
     }
 }
