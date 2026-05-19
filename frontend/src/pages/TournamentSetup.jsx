@@ -9,9 +9,10 @@ export default function TournamentSetup() {
     const initialRoomCode = searchParams.get('roomCode') || '';
 
     const [roomCode, setRoomCode] = useState(initialRoomCode);
+    const [loadedRooms, setLoadedRooms] = useState([]); // [{ code: 'ROOM1', count: 8 }]
     const [tournamentName, setTournamentName] = useState('');
     const [tournamentType, setTournamentType] = useState('SINGLE');
-    const [teams, setTeams] = useState([]);
+    const [teams, setTeams] = useState([]); // Accumulated list of teams from all loaded rooms
     const [selectedTeamIds, setSelectedTeamIds] = useState([]);
     const [loading, setLoading] = useState(false);
     const [fetchingTeams, setFetchingTeams] = useState(false);
@@ -25,30 +26,58 @@ export default function TournamentSetup() {
         }
     }, [initialRoomCode]);
 
-    // Whenever tournamentType changes, clear or pre-fill selections based on target count
+    // Whenever tournamentType changes, adjust selected teams to matches required count if possible
     useEffect(() => {
         if (teams.length === requiredCount) {
             setSelectedTeamIds(teams.map(t => t.id));
         } else {
             setSelectedTeamIds([]);
         }
-    }, [tournamentType, teams]);
+    }, [tournamentType]);
 
     const fetchTeams = async (code) => {
-        if (!code) return;
+        const cleanCode = code.trim().toUpperCase();
+        if (!cleanCode) return;
+
+        // Check if room is already loaded
+        if (loadedRooms.some(r => r.code === cleanCode)) {
+            setError(`Room ${cleanCode} is already loaded.`);
+            return;
+        }
+
         setFetchingTeams(true);
         setError('');
         try {
-            const res = await getRoomTeams(code);
+            const res = await getRoomTeams(cleanCode);
             if (res.success) {
-                setTeams(res.data);
+                const newTeams = res.data;
+                if (newTeams.length === 0) {
+                    setError(`Room ${cleanCode} has no teams.`);
+                    return;
+                }
+
+                // Add to accumulated list, filtering out duplicates just in case
+                setTeams(prevTeams => {
+                    const existingIds = new Set(prevTeams.map(t => t.id));
+                    const filteredNew = newTeams.filter(t => !existingIds.has(t.id));
+                    
+                    // Auto-select these teams
+                    setSelectedTeamIds(prevSelect => {
+                        const newSelect = [...prevSelect, ...filteredNew.map(t => t.id)];
+                        // Limit auto-selection to required count
+                        return newSelect.slice(0, requiredCount);
+                    });
+
+                    return [...prevTeams, ...filteredNew];
+                });
+
+                setLoadedRooms(prevRooms => [...prevRooms, { code: cleanCode, count: newTeams.length }]);
+                setRoomCode(''); // Clear input for next room
             } else {
-                setError(res.error || 'Failed to fetch teams. Verify room code.');
-                setTeams([]);
+                setError(res.error || `Failed to fetch teams for room ${cleanCode}.`);
             }
         } catch (err) {
             setError('Error connecting to server.');
-            setTeams([]);
         } finally {
             setFetchingTeams(false);
         }
@@ -57,6 +86,20 @@ export default function TournamentSetup() {
     const handleLoadTeams = (e) => {
         e.preventDefault();
         fetchTeams(roomCode);
+    };
+
+    const handleRemoveRoom = (roomToRemove) => {
+        // Fetch teams in room to remove them from accumulated list
+        getRoomTeams(roomToRemove).then(res => {
+            if (res.success) {
+                const teamIdsToRemove = new Set(res.data.map(t => t.id));
+                setTeams(prev => prev.filter(t => !teamIdsToRemove.has(t.id)));
+                setSelectedTeamIds(prev => prev.filter(id => !teamIdsToRemove.has(id)));
+                setLoadedRooms(prev => prev.filter(r => r.code !== roomToRemove));
+            }
+        }).catch(err => {
+            console.error('Error removing room', err);
+        });
     };
 
     const handleCheckboxChange = (teamId) => {
@@ -113,9 +156,43 @@ export default function TournamentSetup() {
                     </div>
                 )}
 
+                {/* Tournament configuration */}
+                <div className="mb-6 space-y-4">
+                    <div>
+                        <label className="block text-gray-400 text-xs font-bold uppercase tracking-widest mb-2">
+                            Tournament Type
+                        </label>
+                        <div className="flex gap-4">
+                            <label className="flex items-center space-x-2 cursor-pointer bg-gray-800 border border-gray-700 p-3 rounded-lg flex-1">
+                                <input
+                                    type="radio"
+                                    name="type"
+                                    value="SINGLE"
+                                    checked={tournamentType === 'SINGLE'}
+                                    onChange={() => setTournamentType('SINGLE')}
+                                    className="accent-indigo-500"
+                                />
+                                <span>Single Phase (8 Teams)</span>
+                            </label>
+                            <label className="flex items-center space-x-2 cursor-pointer bg-gray-800 border border-gray-700 p-3 rounded-lg flex-1">
+                                <input
+                                    type="radio"
+                                    name="type"
+                                    value="DOUBLE"
+                                    checked={tournamentType === 'DOUBLE'}
+                                    onChange={() => setTournamentType('DOUBLE')}
+                                    className="accent-indigo-500"
+                                />
+                                <span>Double Phase (64 Teams)</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Add room form */}
                 <form onSubmit={handleLoadTeams} className="mb-6">
                     <label className="block text-gray-400 text-xs font-bold uppercase tracking-widest mb-2">
-                        Load Teams from Auction Room
+                        Load Teams from Auction Rooms
                     </label>
                     <div className="flex gap-3">
                         <input
@@ -135,6 +212,32 @@ export default function TournamentSetup() {
                     </div>
                 </form>
 
+                {/* Display loaded rooms */}
+                {loadedRooms.length > 0 && (
+                    <div className="mb-6">
+                        <label className="block text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2">
+                            Loaded Auction Rooms
+                        </label>
+                        <div className="flex flex-wrap gap-2">
+                            {loadedRooms.map(room => (
+                                <div key={room.code} className="flex items-center space-x-2 bg-gray-800 border border-gray-750 px-3 py-1.5 rounded-lg text-xs">
+                                    <span className="font-mono font-bold text-indigo-400">{room.code}</span>
+                                    <span className="text-gray-400">({room.count} teams)</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleRemoveRoom(room.code)}
+                                        className="text-red-400 hover:text-red-500 font-bold ml-1"
+                                        title="Remove room teams"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Select accumulated teams */}
                 {teams.length > 0 && (
                     <form onSubmit={handleCreate} className="space-y-6">
                         <div>
@@ -152,42 +255,12 @@ export default function TournamentSetup() {
                         </div>
 
                         <div>
-                            <label className="block text-gray-400 text-xs font-bold uppercase tracking-widest mb-2">
-                                Tournament Type
-                            </label>
-                            <div className="flex gap-4">
-                                <label className="flex items-center space-x-2 cursor-pointer bg-gray-800 border border-gray-700 p-3 rounded-lg flex-1">
-                                    <input
-                                        type="radio"
-                                        name="type"
-                                        value="SINGLE"
-                                        checked={tournamentType === 'SINGLE'}
-                                        onChange={() => setTournamentType('SINGLE')}
-                                        className="accent-indigo-500"
-                                    />
-                                    <span>Single Phase (8 Teams)</span>
-                                </label>
-                                <label className="flex items-center space-x-2 cursor-pointer bg-gray-800 border border-gray-700 p-3 rounded-lg flex-1">
-                                    <input
-                                        type="radio"
-                                        name="type"
-                                        value="DOUBLE"
-                                        checked={tournamentType === 'DOUBLE'}
-                                        onChange={() => setTournamentType('DOUBLE')}
-                                        className="accent-indigo-500"
-                                    />
-                                    <span>Double Phase (64 Teams)</span>
-                                </label>
-                            </div>
-                        </div>
-
-                        <div>
                             <div className="flex justify-between items-center mb-2">
                                 <label className="text-gray-400 text-xs font-bold uppercase tracking-widest">
                                     Select Teams ({selectedTeamIds.length} / {requiredCount})
                                 </label>
-                                {teams.length !== requiredCount && (
-                                    <span className="text-xs text-yellow-500 font-semibold">
+                                {selectedTeamIds.length !== requiredCount && (
+                                    <span className="text-xs text-yellow-500 font-semibold animate-pulse">
                                         Must select exactly {requiredCount} teams
                                     </span>
                                 )}
