@@ -18,6 +18,9 @@ export default function TournamentSetup() {
     const [fetchingTeams, setFetchingTeams] = useState(false);
     const [error, setError] = useState('');
 
+    const [sport, setSport] = useState('FOOTBALL');
+    const [overs, setOvers] = useState(20);
+
     const requiredCount = tournamentType === 'SINGLE' ? 8 : 64;
 
     useEffect(() => {
@@ -130,7 +133,7 @@ export default function TournamentSetup() {
 
         setLoading(true);
         try {
-            const res = await createTournament(tournamentName, tournamentType, selectedTeamIds);
+            const res = await createTournament(tournamentName, tournamentType, selectedTeamIds, sport, sport === 'CRICKET' ? overs : null);
             if (res.success) {
                 navigate(`/tournament/${res.data.id}`);
             } else {
@@ -186,6 +189,37 @@ export default function TournamentSetup() {
                                 <span>Double Phase (64 Teams)</span>
                             </label>
                         </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-gray-400 text-xs font-bold uppercase tracking-widest mb-2">
+                                Sport
+                            </label>
+                            <select
+                                value={sport}
+                                onChange={(e) => setSport(e.target.value)}
+                                className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
+                            >
+                                <option value="FOOTBALL">Football ⚽</option>
+                                <option value="CRICKET">Cricket 🏏</option>
+                            </select>
+                        </div>
+                        {sport === 'CRICKET' && (
+                            <div>
+                                <label className="block text-gray-400 text-xs font-bold uppercase tracking-widest mb-2">
+                                    Overs Limit
+                                </label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    max="50"
+                                    value={overs}
+                                    onChange={(e) => setOvers(parseInt(e.target.value) || 20)}
+                                    className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-indigo-500 font-mono"
+                                />
+                            </div>
+                        )}
                     </div>
                 </div>
 

@@ -43,6 +43,12 @@ public class MatchFixture {
     @Column(name = "played_at")
     private Instant playedAt;
 
+    @Column(name = "sport", nullable = false, length = 20)
+    private String sport = "FOOTBALL";
+
+    @Column(name = "overs")
+    private Integer overs;
+
     public MatchFixture() {}
 
     public MatchFixture(Long tournamentId, Long homeTeamId, Long awayTeamId,
@@ -88,6 +94,12 @@ public class MatchFixture {
 
     public Instant getPlayedAt() { return playedAt; }
     public void setPlayedAt(Instant playedAt) { this.playedAt = playedAt; }
+
+    public String getSport() { return sport; }
+    public void setSport(String sport) { this.sport = sport; }
+
+    public Integer getOvers() { return overs; }
+    public void setOvers(Integer overs) { this.overs = overs; }
 
     public enum MatchRound {
         GROUP, ROUND_OF_16, QUARTER, SEMI, FINAL

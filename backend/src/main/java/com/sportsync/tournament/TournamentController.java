@@ -30,7 +30,9 @@ public class TournamentController {
         TournamentDto tournament = tournamentService.createTournament(
                 request.getName(), 
                 request.getType(), 
-                request.getTeamIds()
+                request.getTeamIds(),
+                request.getSport(),
+                request.getOvers()
         );
         return ApiResponse.success(tournament);
     }
@@ -61,6 +63,20 @@ public class TournamentController {
             @RequestParam(defaultValue = "1") Integer group) {
         List<Standing> standings = standingRepository
                 .findByTournamentIdAndPhaseNumberAndGroupNumberOrderByPointsDescGoalDifferenceDescGoalsForDesc(id, phase, group);
+        try {
+            TournamentDto tournament = tournamentService.getTournament(id);
+            if (tournament != null && "CRICKET".equalsIgnoreCase(tournament.getSport())) {
+                standings.sort((s1, s2) -> {
+                    int pComp = s2.getPoints().compareTo(s1.getPoints());
+                    if (pComp != 0) return pComp;
+                    Double nrr1 = s1.getNrr() != null ? s1.getNrr() : 0.0;
+                    Double nrr2 = s2.getNrr() != null ? s2.getNrr() : 0.0;
+                    return nrr2.compareTo(nrr1);
+                });
+            }
+        } catch (Exception e) {
+            // fallback if tournament not found or other issue
+        }
         return ApiResponse.success(standings);
     }
 

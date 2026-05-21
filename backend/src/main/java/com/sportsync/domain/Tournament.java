@@ -28,6 +28,9 @@ public class Tournament {
     @Column(name = "auction_room_id")
     private Long auctionRoomId;
 
+    @Column(name = "sport", nullable = false, length = 20)
+    private String sport = "FOOTBALL";
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
@@ -36,6 +39,12 @@ public class Tournament {
     public Tournament(String name, TournamentType type) {
         this.name = name;
         this.type = type;
+    }
+
+    public Tournament(String name, TournamentType type, String sport) {
+        this.name = name;
+        this.type = type;
+        this.sport = sport;
     }
 
     // Getters and Setters
@@ -56,6 +65,9 @@ public class Tournament {
 
     public Long getAuctionRoomId() { return auctionRoomId; }
     public void setAuctionRoomId(Long auctionRoomId) { this.auctionRoomId = auctionRoomId; }
+
+    public String getSport() { return sport; }
+    public void setSport(String sport) { this.sport = sport; }
 
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }

@@ -10,6 +10,7 @@ public class TournamentDto {
     private Integer currentPhase;
     private Tournament.TournamentStatus status;
     private Long auctionRoomId;
+    private String sport;
     private Instant createdAt;
 
     public TournamentDto() {}
@@ -21,6 +22,7 @@ public class TournamentDto {
         this.currentPhase = tournament.getCurrentPhase();
         this.status = tournament.getStatus();
         this.auctionRoomId = tournament.getAuctionRoomId();
+        this.sport = tournament.getSport();
         this.createdAt = tournament.getCreatedAt();
     }
 
@@ -36,6 +38,8 @@ public class TournamentDto {
     public void setStatus(Tournament.TournamentStatus status) { this.status = status; }
     public Long getAuctionRoomId() { return auctionRoomId; }
     public void setAuctionRoomId(Long auctionRoomId) { this.auctionRoomId = auctionRoomId; }
+    public String getSport() { return sport; }
+    public void setSport(String sport) { this.sport = sport; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
 }

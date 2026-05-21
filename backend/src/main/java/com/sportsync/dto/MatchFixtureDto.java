@@ -19,6 +19,8 @@ public class MatchFixtureDto {
     // Additional populated fields
     private String homeTeamName;
     private String awayTeamName;
+    private String sport;
+    private Integer overs;
 
     public MatchFixtureDto() {}
 
@@ -34,6 +36,8 @@ public class MatchFixtureDto {
         this.awayScore = fixture.getAwayScore();
         this.status = fixture.getStatus();
         this.playedAt = fixture.getPlayedAt();
+        this.sport = fixture.getSport();
+        this.overs = fixture.getOvers();
     }
 
     public Long getId() { return id; }
@@ -62,4 +66,8 @@ public class MatchFixtureDto {
     public void setHomeTeamName(String homeTeamName) { this.homeTeamName = homeTeamName; }
     public String getAwayTeamName() { return awayTeamName; }
     public void setAwayTeamName(String awayTeamName) { this.awayTeamName = awayTeamName; }
+    public String getSport() { return sport; }
+    public void setSport(String sport) { this.sport = sport; }
+    public Integer getOvers() { return overs; }
+    public void setOvers(Integer overs) { this.overs = overs; }
 }

@@ -65,7 +65,7 @@ public class TournamentService {
     }
 
     @Transactional
-    public TournamentDto createTournament(String name, String type, List<Long> teamIds) {
+    public TournamentDto createTournament(String name, String type, List<Long> teamIds, String sport, Integer overs) {
         Tournament.TournamentType tournamentType = Tournament.TournamentType.valueOf(type);
         
         if (tournamentType == Tournament.TournamentType.SINGLE && teamIds.size() != 8) {
@@ -75,7 +75,8 @@ public class TournamentService {
             throw new IllegalArgumentException("Double phase tournament requires exactly 64 teams");
         }
 
-        Tournament tournament = new Tournament(name, tournamentType);
+        String effectiveSport = (sport != null && !sport.isBlank()) ? sport : "FOOTBALL";
+        Tournament tournament = new Tournament(name, tournamentType, effectiveSport);
         tournament = tournamentRepository.save(tournament);
 
         List<Team> teams = new ArrayList<>();
@@ -94,6 +95,12 @@ public class TournamentService {
                 standingRepository.save(standing);
             }
             List<MatchFixture> fixtures = fixtureGeneratorService.generateRoundRobinFixtures(tournament.getId(), teams, 1, 1);
+            if ("CRICKET".equalsIgnoreCase(effectiveSport)) {
+                for (MatchFixture f : fixtures) {
+                    f.setSport("CRICKET");
+                    f.setOvers(overs != null ? overs : 20);
+                }
+            }
             fixtureRepository.saveAll(fixtures);
         } else {
             // DOUBLE phase tournament: 64 teams divided into 8 groups of 8 teams
@@ -111,6 +118,12 @@ public class TournamentService {
                     standingRepository.save(standing);
                 }
                 List<MatchFixture> groupFixtures = fixtureGeneratorService.generateRoundRobinFixtures(tournament.getId(), groupTeams, 1, groupNum);
+                if ("CRICKET".equalsIgnoreCase(effectiveSport)) {
+                    for (MatchFixture f : groupFixtures) {
+                        f.setSport("CRICKET");
+                        f.setOvers(overs != null ? overs : 20);
+                    }
+                }
                 fixtureRepository.saveAll(groupFixtures);
             }
         }

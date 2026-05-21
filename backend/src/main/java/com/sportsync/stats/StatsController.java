@@ -26,4 +26,14 @@ public class StatsController {
     public ApiResponse<List<PlayerStatDto>> getTopAssisters(@PathVariable Long id) {
         return ApiResponse.success(statsService.getTopStats(id, MatchEvent.EventType.ASSIST));
     }
+
+    @GetMapping("/cricket/top-scorers")
+    public ApiResponse<List<com.sportsync.dto.CricketPlayerStatDto>> getTopCricketScorers(@PathVariable Long id) {
+        return ApiResponse.success(statsService.getTopCricketScorers(id));
+    }
+
+    @GetMapping("/cricket/top-wickets")
+    public ApiResponse<List<com.sportsync.dto.CricketPlayerStatDto>> getTopCricketWickets(@PathVariable Long id) {
+        return ApiResponse.success(statsService.getTopCricketWicketTakers(id));
+    }
 }

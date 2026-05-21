@@ -43,6 +43,15 @@ public class Standing {
     @Column(nullable = false)
     private Integer points = 0;
 
+    @Column(nullable = false)
+    private Integer tied = 0;
+
+    @Column(name = "no_result", nullable = false)
+    private Integer noResult = 0;
+
+    @Column(nullable = false)
+    private Double nrr = 0.0;
+
     public Standing() {}
 
     public Standing(Long tournamentId, Long teamId, Integer phaseNumber, Integer groupNumber) {
@@ -77,4 +86,13 @@ public class Standing {
     public Integer getPoints() { return points; }
     public void setPoints(Integer points) { this.points = points; }
     public Integer getGoalDifference() { return goalsFor - goalsAgainst; }
+
+    public Integer getTied() { return tied; }
+    public void setTied(Integer tied) { this.tied = tied; }
+
+    public Integer getNoResult() { return noResult; }
+    public void setNoResult(Integer noResult) { this.noResult = noResult; }
+
+    public Double getNrr() { return nrr; }
+    public void setNrr(Double nrr) { this.nrr = nrr; }
 }

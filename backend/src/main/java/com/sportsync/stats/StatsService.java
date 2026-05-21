@@ -38,4 +38,42 @@ public class StatsService {
                 .setMaxResults(10)
                 .getResultList();
     }
+
+    @Transactional(readOnly = true)
+    public List<com.sportsync.dto.CricketPlayerStatDto> getTopCricketScorers(Long tournamentId) {
+        String query = """
+            SELECT new com.sportsync.dto.CricketPlayerStatDto(
+                p.id, p.name, t.name, p.imageUrl, s.totalRuns, s.totalBallsFaced, s.totalFours, s.totalSixes, s.totalWickets, s.totalOversBowled, s.totalRunsConceded
+            )
+            FROM TournamentPlayerStat s
+            JOIN Player p ON s.playerId = p.id
+            JOIN Team t ON s.teamId = t.id
+            WHERE s.tournamentId = :tournamentId
+            ORDER BY s.totalRuns DESC
+            """;
+
+        return entityManager.createQuery(query, com.sportsync.dto.CricketPlayerStatDto.class)
+                .setParameter("tournamentId", tournamentId)
+                .setMaxResults(10)
+                .getResultList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<com.sportsync.dto.CricketPlayerStatDto> getTopCricketWicketTakers(Long tournamentId) {
+        String query = """
+            SELECT new com.sportsync.dto.CricketPlayerStatDto(
+                p.id, p.name, t.name, p.imageUrl, s.totalRuns, s.totalBallsFaced, s.totalFours, s.totalSixes, s.totalWickets, s.totalOversBowled, s.totalRunsConceded
+            )
+            FROM TournamentPlayerStat s
+            JOIN Player p ON s.playerId = p.id
+            JOIN Team t ON s.teamId = t.id
+            WHERE s.tournamentId = :tournamentId
+            ORDER BY s.totalWickets DESC
+            """;
+
+        return entityManager.createQuery(query, com.sportsync.dto.CricketPlayerStatDto.class)
+                .setParameter("tournamentId", tournamentId)
+                .setMaxResults(10)
+                .getResultList();
+    }
 }
