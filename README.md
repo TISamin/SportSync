@@ -16,6 +16,14 @@ A comprehensive sports management system featuring real-time auction bidding and
 - Live points table, top scorers, top assisters
 - Full match event tracking (goals, assists, minutes)
 
+<!--
+### 🏏 Cricket Module
+- Real-time ball-by-ball live scoring cockpit
+- Complete Innings and Super Over management
+- Net Run Rate (NRR) standings updates
+- Custom stats tracking (Top Run Scorers, Top Wicket Takers)
+-->
+
 ## Tech Stack
 
 | Layer    | Technology              |
@@ -63,6 +71,7 @@ npm run dev
 | 10   | Tournament End             | `feature/step-10-tournament-end` |
 | 11   | Frontend Tournament        | `feature/step-11-frontend-tournament` |
 | 12   | Double Phase               | `feature/step-12-double-phase`  |
+<!-- | 13   | Cricket Support            | `feature/step-13-cricket`       | -->
 
 ## License
 
