@@ -6,7 +6,7 @@ export default function NextBowlerModal({ isOpen, onSubmit, bowlingRoster, lastB
     if (!isOpen) return null;
 
     // Filter out the bowler who bowled the last over (cannot bowl consecutive overs)
-    const eligibleBowlers = bowlingRoster.filter(player => player.id !== lastBowlerId);
+    const eligibleBowlers = bowlingRoster.filter(player => Number(player.id) !== Number(lastBowlerId));
 
     const handleConfirm = () => {
         if (!selectedPlayerId) {

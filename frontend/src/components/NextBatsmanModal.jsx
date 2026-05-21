@@ -8,7 +8,7 @@ export default function NextBatsmanModal({ isOpen, onSubmit, battingRoster, batt
     // Filter roster to show only players who have Did Not Bat (DNB)
     // In our scorecard, each entry has a playerId and status ('DNB', 'NOT_OUT', 'OUT')
     const availablePlayers = battingRoster.filter(player => {
-        const score = battingScorecard.find(s => s.playerId === player.id);
+        const score = battingScorecard.find(s => Number(s.playerId) === Number(player.id));
         // If scorecard is not loaded yet, or status is DNB, player is available
         return !score || score.status === 'DNB';
     });

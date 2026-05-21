@@ -305,8 +305,8 @@ export default function CricketMatchScorer() {
     }
 
     // Identify teams and rosters
-    const homeTeam = teams.find(t => t.id === fixture.homeTeamId);
-    const awayTeam = teams.find(t => t.id === fixture.awayTeamId);
+    const homeTeam = teams.find(t => Number(t.id) === Number(fixture.homeTeamId));
+    const awayTeam = teams.find(t => Number(t.id) === Number(fixture.awayTeamId));
     const homeRoster = homeTeam?.roster || [];
     const awayRoster = awayTeam?.roster || [];
 
@@ -320,7 +320,7 @@ export default function CricketMatchScorer() {
 
     if (!activeBattingTeamId && matchState.tossWinnerId) {
         const tossWinnerBats = matchState.tossDecision === 'BAT';
-        const homeIsTossWinner = matchState.tossWinnerId === fixture.homeTeamId;
+        const homeIsTossWinner = Number(matchState.tossWinnerId) === Number(fixture.homeTeamId);
 
         if (matchState.inningsNumber === 1) {
             if (homeIsTossWinner) {
@@ -341,11 +341,11 @@ export default function CricketMatchScorer() {
         }
     }
 
-    const battingTeamRoster = activeBattingTeamId === fixture.homeTeamId ? homeRoster : awayRoster;
-    const bowlingTeamRoster = activeBowlingTeamId === fixture.homeTeamId ? homeRoster : awayRoster;
+    const battingTeamRoster = Number(activeBattingTeamId) === Number(fixture.homeTeamId) ? homeRoster : awayRoster;
+    const bowlingTeamRoster = Number(activeBowlingTeamId) === Number(fixture.homeTeamId) ? homeRoster : awayRoster;
 
-    const activeBattingTeamName = activeBattingTeamId === fixture.homeTeamId ? fixture.homeTeamName : fixture.awayTeamName;
-    const activeBowlingTeamName = activeBowlingTeamId === fixture.homeTeamId ? fixture.homeTeamName : fixture.awayTeamName;
+    const activeBattingTeamName = Number(activeBattingTeamId) === Number(fixture.homeTeamId) ? fixture.homeTeamName : fixture.awayTeamName;
+    const activeBowlingTeamName = Number(activeBowlingTeamId) === Number(fixture.homeTeamId) ? fixture.homeTeamName : fixture.awayTeamName;
 
     // Detect if openers setup is needed
     // Striker, non-striker, and bowler are all null at the beginning of an innings
