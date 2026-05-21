@@ -314,19 +314,47 @@ export default function CricketMatchScorer() {
     const isTossPhase = matchState.status === 'TOSS';
     const isCompleted = matchState.status === 'COMPLETED';
 
-    const battingTeamRoster = matchState.battingTeamId === fixture.homeTeamId ? homeRoster : awayRoster;
-    const bowlingTeamRoster = matchState.bowlingTeamId === fixture.homeTeamId ? homeRoster : awayRoster;
+    // Resolve batting and bowling teams (fallback to toss decision if innings hasn't started yet)
+    let activeBattingTeamId = matchState.battingTeamId;
+    let activeBowlingTeamId = matchState.bowlingTeamId;
+
+    if (!activeBattingTeamId && matchState.tossWinnerId) {
+        const tossWinnerBats = matchState.tossDecision === 'BAT';
+        const homeIsTossWinner = matchState.tossWinnerId === fixture.homeTeamId;
+
+        if (matchState.inningsNumber === 1) {
+            if (homeIsTossWinner) {
+                activeBattingTeamId = tossWinnerBats ? fixture.homeTeamId : fixture.awayTeamId;
+                activeBowlingTeamId = tossWinnerBats ? fixture.awayTeamId : fixture.homeTeamId;
+            } else {
+                activeBattingTeamId = tossWinnerBats ? fixture.awayTeamId : fixture.homeTeamId;
+                activeBowlingTeamId = tossWinnerBats ? fixture.homeTeamId : fixture.awayTeamId;
+            }
+        } else {
+            if (homeIsTossWinner) {
+                activeBattingTeamId = tossWinnerBats ? fixture.awayTeamId : fixture.homeTeamId;
+                activeBowlingTeamId = tossWinnerBats ? fixture.homeTeamId : fixture.awayTeamId;
+            } else {
+                activeBattingTeamId = tossWinnerBats ? fixture.homeTeamId : fixture.awayTeamId;
+                activeBowlingTeamId = tossWinnerBats ? fixture.awayTeamId : fixture.homeTeamId;
+            }
+        }
+    }
+
+    const battingTeamRoster = activeBattingTeamId === fixture.homeTeamId ? homeRoster : awayRoster;
+    const bowlingTeamRoster = activeBowlingTeamId === fixture.homeTeamId ? homeRoster : awayRoster;
+
+    const activeBattingTeamName = activeBattingTeamId === fixture.homeTeamId ? fixture.homeTeamName : fixture.awayTeamName;
+    const activeBowlingTeamName = activeBowlingTeamId === fixture.homeTeamId ? fixture.homeTeamName : fixture.awayTeamName;
 
     // Detect if openers setup is needed
-    // Striker, non-striker, or bowler not set at the beginning of an innings
+    // Striker, non-striker, and bowler are all null at the beginning of an innings
     const isInitialOpenersSetup = 
         !isTossPhase && 
         !isCompleted && 
         matchState.strikerId === null && 
         matchState.nonStrikerId === null && 
-        matchState.currentBowlerId === null &&
-        matchState.totalRuns === 0 &&
-        matchState.totalOversBowled === 0.0;
+        matchState.currentBowlerId === null;
 
     // Detect if a batsman is dismissed and we need to choose the next batsman
     // If one of the batsmen is null but NOT both (or both null but some runs/overs have been recorded)
@@ -505,7 +533,7 @@ export default function CricketMatchScorer() {
                         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-lg max-w-xl mx-auto space-y-6">
                             <div className="border-b border-gray-800 pb-3">
                                 <h3 className="text-xl font-black uppercase tracking-wider text-white">Setup Opening Players</h3>
-                                <p className="text-xs text-gray-400 mt-1">Select openers for batting team ({matchState.battingTeamName}) and bowling team ({matchState.bowlingTeamName}).</p>
+                                <p className="text-xs text-gray-400 mt-1">Select openers for batting team ({activeBattingTeamName}) and bowling team ({activeBowlingTeamName}).</p>
                             </div>
                             <div className="space-y-4">
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
