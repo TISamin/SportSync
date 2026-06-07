@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Client } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 import { useAuctionStore } from '../store/auctionStore';
+import { WS_BASE_URL } from '../api/config';
 
 export const useAuctionSocket = (roomCode) => {
     const stompClient = useRef(null);
@@ -11,7 +12,7 @@ export const useAuctionSocket = (roomCode) => {
     useEffect(() => {
         if (!roomCode) return;
 
-        const socket = new SockJS('http://localhost:8080/ws');
+        const socket = new SockJS(WS_BASE_URL);
         const client = new Client({
             webSocketFactory: () => socket,
             debug: (str) => console.log(str),

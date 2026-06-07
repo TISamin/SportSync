@@ -1,6 +1,7 @@
 import axios from 'axios';
+import { API_BASE_URL } from './config';
 
-const API_URL = 'http://localhost:8080/api/tournament';
+const API_URL = `${API_BASE_URL}/api/tournament`;
 
 export const createTournament = async (name, type, teamIds, sport = 'FOOTBALL', overs = null) => {
     const response = await axios.post(API_URL, { name, type, teamIds, sport, overs });

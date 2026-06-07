@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Client } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 
+import { WS_BASE_URL } from '../api/config';
+
 export const useCricketSocket = (matchId, onStateUpdate) => {
     const stompClient = useRef(null);
     const [connected, setConnected] = useState(false);
@@ -9,7 +11,7 @@ export const useCricketSocket = (matchId, onStateUpdate) => {
     useEffect(() => {
         if (!matchId) return;
 
-        const socket = new SockJS('http://localhost:8080/ws');
+        const socket = new SockJS(WS_BASE_URL);
         const client = new Client({
             webSocketFactory: () => socket,
             debug: (str) => console.log('[CricketWS] ' + str),

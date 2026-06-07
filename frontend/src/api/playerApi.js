@@ -1,6 +1,7 @@
 import axios from 'axios';
+import { API_BASE_URL } from './config';
 
-const API_URL = 'http://localhost:8080/api/players';
+const API_URL = `${API_BASE_URL}/api/players`;
 
 export const importPlayers = async (roomId, file) => {
     const formData = new FormData();
