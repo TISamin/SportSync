@@ -1,6 +1,7 @@
 import axios from 'axios';
+import { API_BASE_URL } from './config';
 
-const API_URL = 'http://localhost:8080/api/auction/room';
+const API_URL = `${API_BASE_URL}/api/auction/room`;
 
 export const createRoom = async (budgetPerTeam, maxTeams = 8) => {
     const response = await axios.post(API_URL, { budgetPerTeam, maxTeams });
