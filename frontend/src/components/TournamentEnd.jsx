@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { getTournamentResult } from '../api/tournamentApi';
+import { getTournamentResult, getTournament } from '../api/tournamentApi';
+import { getCricketTopScorers, getCricketTopWicketTakers } from '../api/cricketApi';
 
 export default function TournamentEnd({ tournamentId }) {
     const [result, setResult] = useState(null);
@@ -9,11 +10,38 @@ export default function TournamentEnd({ tournamentId }) {
     useEffect(() => {
         const fetchResult = async () => {
             try {
-                const res = await getTournamentResult(tournamentId);
-                if (res.success) {
-                    setResult(res.data);
+                const [tourRes, res] = await Promise.all([
+                    getTournament(tournamentId),
+                    getTournamentResult(tournamentId)
+                ]);
+
+                if (tourRes.success && res.success) {
+                    const tournament = tourRes.data;
+                    const resultData = res.data;
+                    
+                    if (tournament.sport === 'CRICKET') {
+                        const [scorersRes, wicketsRes] = await Promise.all([
+                            getCricketTopScorers(tournamentId),
+                            getCricketTopWicketTakers(tournamentId)
+                        ]);
+                        
+                        const topScorer = scorersRes.success && scorersRes.data.length > 0 ? scorersRes.data[0] : null;
+                        const topWicket = wicketsRes.success && wicketsRes.data.length > 0 ? wicketsRes.data[0] : null;
+                        
+                        setResult({
+                            ...resultData,
+                            sport: 'CRICKET',
+                            topCricketScorer: topScorer,
+                            topCricketWicket: topWicket
+                        });
+                    } else {
+                        setResult({
+                            ...resultData,
+                            sport: 'FOOTBALL'
+                        });
+                    }
                 } else {
-                    setError(res.error || 'Failed to load tournament results.');
+                    setError(res.error || tourRes.error || 'Failed to load tournament results.');
                 }
             } catch (err) {
                 setError('Results are not ready or could not be loaded.');
@@ -85,47 +113,95 @@ export default function TournamentEnd({ tournamentId }) {
 
             {/* Individual Honors */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {/* Golden Boot (Top Scorer) */}
-                <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-md flex items-center space-x-6">
-                    <div className="text-5xl bg-yellow-500/10 border border-yellow-500/20 p-4 rounded-xl">⚽</div>
-                    <div className="flex-1">
-                        <span className="text-[10px] font-black text-yellow-500 uppercase tracking-widest bg-yellow-500/10 border border-yellow-500/25 px-2.5 py-0.5 rounded">
-                            Golden Boot
-                        </span>
-                        {result.topScorer ? (
-                            <>
-                                <h4 className="text-xl font-black text-white mt-2 mb-1">{result.topScorer.playerName}</h4>
-                                <p className="text-sm text-gray-400 font-semibold">{result.topScorer.teamName}</p>
-                                <p className="text-lg font-black text-yellow-500 mt-2">
-                                    {result.topScorer.count} Goals
-                                </p>
-                            </>
-                        ) : (
-                            <p className="text-sm text-gray-500 mt-2">No goals scored in this tournament.</p>
-                        )}
-                    </div>
-                </div>
+                {result.sport === 'CRICKET' ? (
+                    <>
+                        {/* Top Run Scorer */}
+                        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-md flex items-center space-x-6">
+                            <div className="text-5xl bg-yellow-500/10 border border-yellow-500/20 p-4 rounded-xl">🏏</div>
+                            <div className="flex-1">
+                                <span className="text-[10px] font-black text-yellow-500 uppercase tracking-widest bg-yellow-500/10 border border-yellow-500/25 px-2.5 py-0.5 rounded">
+                                    Top Run Scorer
+                                </span>
+                                {result.topCricketScorer ? (
+                                    <>
+                                        <h4 className="text-xl font-black text-white mt-2 mb-1">{result.topCricketScorer.playerName}</h4>
+                                        <p className="text-sm text-gray-400 font-semibold">{result.topCricketScorer.teamName}</p>
+                                        <p className="text-lg font-black text-yellow-500 mt-2">
+                                            {result.topCricketScorer.runs} Runs
+                                        </p>
+                                    </>
+                                ) : (
+                                    <p className="text-sm text-gray-500 mt-2">No runs scored in this tournament.</p>
+                                )}
+                            </div>
+                        </div>
 
-                {/* Playmaker of the Tournament (Top Assister) */}
-                <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-md flex items-center space-x-6">
-                    <div className="text-5xl bg-blue-500/10 border border-blue-500/20 p-4 rounded-xl">🎯</div>
-                    <div className="flex-1">
-                        <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest bg-blue-500/10 border border-blue-500/25 px-2.5 py-0.5 rounded">
-                            Playmaker
-                        </span>
-                        {result.topAssister ? (
-                            <>
-                                <h4 className="text-xl font-black text-white mt-2 mb-1">{result.topAssister.playerName}</h4>
-                                <p className="text-sm text-gray-400 font-semibold">{result.topAssister.teamName}</p>
-                                <p className="text-lg font-black text-blue-400 mt-2">
-                                    {result.topAssister.count} Assists
-                                </p>
-                            </>
-                        ) : (
-                            <p className="text-sm text-gray-500 mt-2">No assists recorded in this tournament.</p>
-                        )}
-                    </div>
-                </div>
+                        {/* Top Wicket Taker */}
+                        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-md flex items-center space-x-6">
+                            <div className="text-5xl bg-blue-500/10 border border-blue-500/20 p-4 rounded-xl">🥎</div>
+                            <div className="flex-1">
+                                <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest bg-blue-500/10 border border-blue-500/25 px-2.5 py-0.5 rounded">
+                                    Top Wicket Taker
+                                </span>
+                                {result.topCricketWicket ? (
+                                    <>
+                                        <h4 className="text-xl font-black text-white mt-2 mb-1">{result.topCricketWicket.playerName}</h4>
+                                        <p className="text-sm text-gray-400 font-semibold">{result.topCricketWicket.teamName}</p>
+                                        <p className="text-lg font-black text-blue-400 mt-2">
+                                            {result.topCricketWicket.wickets} Wickets
+                                        </p>
+                                    </>
+                                ) : (
+                                    <p className="text-sm text-gray-500 mt-2">No wickets taken in this tournament.</p>
+                                )}
+                            </div>
+                        </div>
+                    </>
+                ) : (
+                    <>
+                        {/* Golden Boot (Top Scorer) */}
+                        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-md flex items-center space-x-6">
+                            <div className="text-5xl bg-yellow-500/10 border border-yellow-500/20 p-4 rounded-xl">⚽</div>
+                            <div className="flex-1">
+                                <span className="text-[10px] font-black text-yellow-500 uppercase tracking-widest bg-yellow-500/10 border border-yellow-500/25 px-2.5 py-0.5 rounded">
+                                    Golden Boot
+                                </span>
+                                {result.topScorer ? (
+                                    <>
+                                        <h4 className="text-xl font-black text-white mt-2 mb-1">{result.topScorer.playerName}</h4>
+                                        <p className="text-sm text-gray-400 font-semibold">{result.topScorer.teamName}</p>
+                                        <p className="text-lg font-black text-yellow-500 mt-2">
+                                            {result.topScorer.count} Goals
+                                        </p>
+                                    </>
+                                ) : (
+                                    <p className="text-sm text-gray-500 mt-2">No goals scored in this tournament.</p>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Playmaker of the Tournament (Top Assister) */}
+                        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-md flex items-center space-x-6">
+                            <div className="text-5xl bg-blue-500/10 border border-blue-500/20 p-4 rounded-xl">🎯</div>
+                            <div className="flex-1">
+                                <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest bg-blue-500/10 border border-blue-500/25 px-2.5 py-0.5 rounded">
+                                    Playmaker
+                                </span>
+                                {result.topAssister ? (
+                                    <>
+                                        <h4 className="text-xl font-black text-white mt-2 mb-1">{result.topAssister.playerName}</h4>
+                                        <p className="text-sm text-gray-400 font-semibold">{result.topAssister.teamName}</p>
+                                        <p className="text-lg font-black text-blue-400 mt-2">
+                                            {result.topAssister.count} Assists
+                                        </p>
+                                    </>
+                                ) : (
+                                    <p className="text-sm text-gray-500 mt-2">No assists recorded in this tournament.</p>
+                                )}
+                            </div>
+                        </div>
+                    </>
+                )}
             </div>
         </div>
     );

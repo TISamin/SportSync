@@ -4,7 +4,7 @@ import AdminSetup from './pages/AdminSetup';
 import AuctionRoom from './pages/AuctionRoom';
 import TournamentSetup from './pages/TournamentSetup';
 import TournamentDashboard from './pages/TournamentDashboard';
-
+import CricketMatchScorer from './pages/CricketMatchScorer';
 
 function App() {
   return (
@@ -20,7 +20,7 @@ function App() {
         {/* Tournament Routes */}
         <Route path="/tournament/setup" element={<TournamentSetup />} />
         <Route path="/tournament/:id" element={<TournamentDashboard />} />
-
+        <Route path="/tournament/:id/cricket-match/:matchId" element={<CricketMatchScorer />} />
       </Routes>
     </Router>
   );

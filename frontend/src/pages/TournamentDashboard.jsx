@@ -13,6 +13,8 @@ import {
 import MatchResultModal from '../components/MatchResultModal';
 import KnockoutBracket from '../components/KnockoutBracket';
 import TournamentEnd from '../components/TournamentEnd';
+import { getCricketTopScorers, getCricketTopWicketTakers } from '../api/cricketApi';
+
 export default function TournamentDashboard() {
     const { id } = useParams();
     const navigate = useNavigate();
