@@ -13,7 +13,7 @@ import {
 import MatchResultModal from '../components/MatchResultModal';
 import KnockoutBracket from '../components/KnockoutBracket';
 import TournamentEnd from '../components/TournamentEnd';
-import { getCricketTopScorers, getCricketTopWicketTakers } from '../api/cricketApi';
+
 
 export default function TournamentDashboard() {
     const { id } = useParams();
@@ -68,13 +68,11 @@ export default function TournamentDashboard() {
             if (metadataRes.success) {
                 const tournamentData = metadataRes.data;
                 setTournament(tournamentData);
-                const isCricket = tournamentData.sport === 'CRICKET';
-
                 const [fixRes, koRes, scorersRes, assistersRes, teamsRes] = await Promise.all([
                     getTournamentFixtures(id),
                     getKnockoutFixtures(id),
-                    isCricket ? getCricketTopScorers(id) : getTopScorers(id),
-                    isCricket ? getCricketTopWicketTakers(id) : getTopAssisters(id),
+                    getTopScorers(id),
+                    getTopAssisters(id),
                     getTournamentTeams(id)
                 ]);
 
@@ -323,17 +321,11 @@ export default function TournamentDashboard() {
                                         <th className="py-3 px-4">Team</th>
                                         <th className="py-3 px-4 text-center">P</th>
                                         <th className="py-3 px-4 text-center">W</th>
-                                        <th className="py-3 px-4 text-center">{tournament.sport === 'CRICKET' ? 'T' : 'D'}</th>
+                                        <th className="py-3 px-4 text-center">D</th>
                                         <th className="py-3 px-4 text-center">L</th>
-                                        {tournament.sport === 'CRICKET' ? (
-                                            <th className="py-3 px-4 text-center">NRR</th>
-                                        ) : (
-                                            <>
-                                                <th className="py-3 px-4 text-center">GD</th>
-                                                <th className="py-3 px-4 text-center">GF</th>
-                                                <th className="py-3 px-4 text-center">GA</th>
-                                            </>
-                                        )}
+                                        <th className="py-3 px-4 text-center">GD</th>
+                                        <th className="py-3 px-4 text-center">GF</th>
+                                        <th className="py-3 px-4 text-center">GA</th>
                                         <th className="py-3 px-4 text-center text-indigo-400">Pts</th>
                                     </tr>
                                 </thead>
@@ -348,30 +340,22 @@ export default function TournamentDashboard() {
                                                 <td className="py-3.5 px-4 text-center text-sm text-green-400 font-semibold">{standing.won}</td>
                                                 <td className="py-3.5 px-4 text-center text-sm text-gray-400 font-semibold">{standing.drawn}</td>
                                                 <td className="py-3.5 px-4 text-center text-sm text-red-400 font-semibold">{standing.lost}</td>
-                                                {tournament.sport === 'CRICKET' ? (
+                                                <>
                                                     <td className={`py-3.5 px-4 text-center text-sm font-mono font-bold ${
-                                                        (standing.nrr || 0) > 0 ? 'text-green-400' : (standing.nrr || 0) < 0 ? 'text-red-400' : 'text-gray-400'
+                                                        standing.goalDifference > 0 ? 'text-green-400' : standing.goalDifference < 0 ? 'text-red-400' : 'text-gray-400'
                                                     }`}>
-                                                        {(standing.nrr || 0) > 0 ? `+${(standing.nrr || 0).toFixed(3)}` : (standing.nrr || 0).toFixed(3)}
+                                                        {standing.goalDifference > 0 ? `+${standing.goalDifference}` : standing.goalDifference}
                                                     </td>
-                                                ) : (
-                                                    <>
-                                                        <td className={`py-3.5 px-4 text-center text-sm font-mono font-bold ${
-                                                            standing.goalDifference > 0 ? 'text-green-400' : standing.goalDifference < 0 ? 'text-red-400' : 'text-gray-400'
-                                                        }`}>
-                                                            {standing.goalDifference > 0 ? `+${standing.goalDifference}` : standing.goalDifference}
-                                                        </td>
-                                                        <td className="py-3.5 px-4 text-center text-sm font-mono text-gray-400">{standing.goalsFor}</td>
-                                                        <td className="py-3.5 px-4 text-center text-sm font-mono text-gray-400">{standing.goalsAgainst}</td>
-                                                    </>
-                                                )}
+                                                    <td className="py-3.5 px-4 text-center text-sm font-mono text-gray-400">{standing.goalsFor}</td>
+                                                    <td className="py-3.5 px-4 text-center text-sm font-mono text-gray-400">{standing.goalsAgainst}</td>
+                                                </>
                                                 <td className="py-3.5 px-4 text-center font-black text-sm text-indigo-400">{standing.points}</td>
                                             </tr>
                                         );
                                     })}
                                     {standings.length === 0 && (
                                         <tr>
-                                            <td colSpan={tournament.sport === 'CRICKET' ? 8 : 10} className="text-center py-8 text-gray-500 font-medium">No standings found for this group.</td>
+                                            <td colSpan={10} className="text-center py-8 text-gray-500 font-medium">No standings found for this group.</td>
                                         </tr>
                                     )}
                                 </tbody>
@@ -421,12 +405,8 @@ export default function TournamentDashboard() {
                                                     {isAdmin ? (
                                                         <button
                                                             onClick={() => {
-                                                                if (tournament.sport === 'CRICKET') {
-                                                                    navigate(`/tournament/${id}/cricket-match/${fixture.id}`);
-                                                                } else {
-                                                                    setSelectedFixture(fixture);
-                                                                    setIsModalOpen(true);
-                                                                }
+                                                                setSelectedFixture(fixture);
+                                                                setIsModalOpen(true);
                                                             }}
                                                             className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-3 py-1.5 rounded uppercase tracking-wider transition-all"
                                                         >
@@ -455,12 +435,8 @@ export default function TournamentDashboard() {
                         tournamentType={tournament.type}
                         onRefresh={refreshData}
                         onEnterResult={(fixture) => {
-                            if (tournament.sport === 'CRICKET') {
-                                navigate(`/tournament/${id}/cricket-match/${fixture.id}`);
-                            } else {
-                                setSelectedFixture(fixture);
-                                setIsModalOpen(true);
-                            }
+                            setSelectedFixture(fixture);
+                            setIsModalOpen(true);
                         }}
                     />
                 )}
@@ -470,12 +446,12 @@ export default function TournamentDashboard() {
                         {/* Top Scorers */}
                         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-lg">
                             <h3 className="text-lg font-black uppercase tracking-wider mb-4 border-b border-gray-800 pb-3 flex items-center">
-                                <span className="mr-2">{tournament.sport === 'CRICKET' ? '🏏' : '⚽'}</span>
-                                {tournament.sport === 'CRICKET' ? 'Top Run Scorers' : 'Top Scorers'}
+                                <span className="mr-2">⚽</span>
+                                Top Scorers
                             </h3>
                             {topScorers.length === 0 ? (
                                 <p className="text-gray-500 text-sm">
-                                    {tournament.sport === 'CRICKET' ? 'No runs recorded yet.' : 'No goals recorded yet.'}
+                                    No goals recorded yet.
                                 </p>
                             ) : (
                                 <div className="space-y-3">
@@ -486,7 +462,7 @@ export default function TournamentDashboard() {
                                                 <p className="text-xs text-gray-400 font-semibold">{stat.teamName}</p>
                                             </div>
                                             <span className="font-black text-indigo-400 font-mono text-base bg-indigo-500/10 px-3 py-1 rounded">
-                                                {tournament.sport === 'CRICKET' ? `${stat.runs} Runs` : `${stat.count} Goals`}
+                                                {stat.count} Goals
                                             </span>
                                         </div>
                                     ))}
@@ -497,12 +473,12 @@ export default function TournamentDashboard() {
                         {/* Top Assisters */}
                         <div className="bg-gray-900 border border-gray-850 rounded-2xl p-6 shadow-lg">
                             <h3 className="text-lg font-black uppercase tracking-wider mb-4 border-b border-gray-800 pb-3 flex items-center">
-                                <span className="mr-2">{tournament.sport === 'CRICKET' ? '🥎' : '🎯'}</span>
-                                {tournament.sport === 'CRICKET' ? 'Top Wicket Takers' : 'Top Assisters'}
+                                <span className="mr-2">🎯</span>
+                                Top Assisters
                             </h3>
                             {topAssisters.length === 0 ? (
                                 <p className="text-gray-500 text-sm">
-                                    {tournament.sport === 'CRICKET' ? 'No wickets recorded yet.' : 'No assists recorded yet.'}
+                                    No assists recorded yet.
                                 </p>
                             ) : (
                                 <div className="space-y-3">
@@ -513,7 +489,7 @@ export default function TournamentDashboard() {
                                                 <p className="text-xs text-gray-400 font-semibold">{stat.teamName}</p>
                                             </div>
                                             <span className="font-black text-indigo-400 font-mono text-base bg-indigo-500/10 px-3 py-1 rounded">
-                                                {tournament.sport === 'CRICKET' ? `${stat.wickets} Wkts` : `${stat.count} Assists`}
+                                                {stat.count} Assists
                                             </span>
                                         </div>
                                     ))}
