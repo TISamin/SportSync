@@ -486,7 +486,7 @@ export default function TournamentDashboard() {
                                                 <p className="text-xs text-gray-400 font-semibold">{stat.teamName}</p>
                                             </div>
                                             <span className="font-black text-indigo-400 font-mono text-base bg-indigo-500/10 px-3 py-1 rounded">
-                                                {tournament.sport === 'CRICKET' ? `${stat.runs} Runs` : stat.statValue}
+                                                {tournament.sport === 'CRICKET' ? `${stat.runs} Runs` : `${stat.count} Goals`}
                                             </span>
                                         </div>
                                     ))}
@@ -513,7 +513,7 @@ export default function TournamentDashboard() {
                                                 <p className="text-xs text-gray-400 font-semibold">{stat.teamName}</p>
                                             </div>
                                             <span className="font-black text-indigo-400 font-mono text-base bg-indigo-500/10 px-3 py-1 rounded">
-                                                {tournament.sport === 'CRICKET' ? `${stat.wickets} Wkts` : stat.statValue}
+                                                {tournament.sport === 'CRICKET' ? `${stat.wickets} Wkts` : `${stat.count} Assists`}
                                             </span>
                                         </div>
                                     ))}
