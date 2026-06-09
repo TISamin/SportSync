@@ -14,7 +14,7 @@ public class Team {
     @Column(name = "auction_room_id")
     private Long auctionRoomId;
 
-    @Column(nullable = false, length = 100)
+    @Column(name = "team_name", nullable = false, length = 100)
     private String name;
 
     @Column(name = "owner_name", length = 100)
