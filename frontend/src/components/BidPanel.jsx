@@ -27,21 +27,22 @@ export default function BidPanel({ onBid }) {
     };
 
     return (
-        <div className="bg-gray-900 p-6 rounded-xl border border-gray-800 flex flex-col items-center justify-center space-y-4">
+        <div className="bg-surface p-6 rounded-xl border border-border flex flex-col items-center justify-center space-y-4 shadow-md">
             <div className="text-center">
-                <p className="text-gray-400 text-sm font-bold uppercase tracking-widest mb-1">Current Bid</p>
-                <p className="text-5xl font-black text-white">${currentBid.toLocaleString()}</p>
+                <p className="text-muted text-sm font-bold uppercase tracking-widest mb-1">Current Bid</p>
+                <p className="text-5xl font-black text-txt">${currentBid.toLocaleString()}</p>
             </div>
             
             <div className="h-8">
                 {leadingTeam ? (
-                    <p className="text-indigo-400 font-medium">
-                        Leading: <span className="font-bold text-white">{leadingTeam.name}</span>
+                    <p className="text-indigo-600 dark:text-indigo-400 font-medium">
+                        Leading: <span className="font-bold text-txt">{leadingTeam.name}</span>
                     </p>
                 ) : (
-                    <p className="text-gray-500 font-medium">No bids yet</p>
+                    <p className="text-muted font-medium">No bids yet</p>
                 )}
             </div>
+
 
             {!isAdmin && (
                 <button

@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
+/* eslint-disable react-hooks/set-state-in-effect */
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getRoomTeams } from '../api/auctionApi';
 import { createTournament } from '../api/tournamentApi';
+import ThemeToggle from '../components/ThemeToggle';
 
 export default function TournamentSetup() {
     const navigate = useNavigate();
@@ -20,22 +22,7 @@ export default function TournamentSetup() {
 
     const requiredCount = tournamentType === 'SINGLE' ? 8 : 64;
 
-    useEffect(() => {
-        if (initialRoomCode) {
-            fetchTeams(initialRoomCode);
-        }
-    }, [initialRoomCode]);
-
-    // Whenever tournamentType changes, adjust selected teams to matches required count if possible
-    useEffect(() => {
-        if (teams.length === requiredCount) {
-            setSelectedTeamIds(teams.map(t => t.id));
-        } else {
-            setSelectedTeamIds([]);
-        }
-    }, [tournamentType]);
-
-    const fetchTeams = async (code) => {
+    const fetchTeams = useCallback(async (code) => {
         const cleanCode = code.trim().toUpperCase();
         if (!cleanCode) return;
 
@@ -77,9 +64,26 @@ export default function TournamentSetup() {
                 setError(res.error || `Failed to fetch teams for room ${cleanCode}.`);
             }
         } catch (err) {
-            setError('Error connecting to server.');
+            console.error(err);
+            setError(err.response?.data?.error || err.message || 'Error connecting to server.');
         } finally {
             setFetchingTeams(false);
+        }
+    }, [loadedRooms, requiredCount]);
+
+    useEffect(() => {
+        if (initialRoomCode) {
+            fetchTeams(initialRoomCode);
+        }
+    }, [initialRoomCode, fetchTeams]);
+
+    const handleTypeChange = (type) => {
+        setTournamentType(type);
+        const reqCount = type === 'SINGLE' ? 8 : 64;
+        if (teams.length === reqCount) {
+            setSelectedTeamIds(teams.map(t => t.id));
+        } else {
+            setSelectedTeamIds([]);
         }
     };
 
@@ -144,10 +148,14 @@ export default function TournamentSetup() {
     };
 
     return (
-        <div className="min-h-screen bg-black flex items-center justify-center p-6 text-white">
-            <div className="bg-gray-900 border border-gray-800 p-8 rounded-2xl shadow-2xl max-w-lg w-full">
+        <div className="min-h-screen bg-base flex flex-col items-center justify-center p-6 text-txt relative">
+            <div className="absolute top-4 right-4">
+                <ThemeToggle />
+            </div>
+            
+            <div className="bg-surface border border-border p-8 rounded-2xl shadow-2xl max-w-lg w-full relative">
                 <div className="flex justify-between items-center mb-6">
-                    <h1 className="text-3xl font-black tracking-widest uppercase">Setup Tournament</h1>
+                    <h1 className="text-3xl font-black tracking-widest uppercase text-txt">Setup Tournament</h1>
                 </div>
 
                 {error && (
@@ -159,28 +167,28 @@ export default function TournamentSetup() {
                 {/* Tournament configuration */}
                 <div className="mb-6 space-y-4">
                     <div>
-                        <label className="block text-gray-400 text-xs font-bold uppercase tracking-widest mb-2">
+                        <label className="block text-muted text-xs font-bold uppercase tracking-widest mb-2">
                             Tournament Type
                         </label>
                         <div className="flex gap-4">
-                            <label className="flex items-center space-x-2 cursor-pointer bg-gray-800 border border-gray-700 p-3 rounded-lg flex-1">
+                            <label className="flex items-center space-x-2 cursor-pointer bg-input border border-border p-3 rounded-lg flex-1">
                                 <input
                                     type="radio"
                                     name="type"
                                     value="SINGLE"
                                     checked={tournamentType === 'SINGLE'}
-                                    onChange={() => setTournamentType('SINGLE')}
+                                    onChange={() => handleTypeChange('SINGLE')}
                                     className="accent-indigo-500"
                                 />
                                 <span>Single Phase (8 Teams)</span>
                             </label>
-                            <label className="flex items-center space-x-2 cursor-pointer bg-gray-800 border border-gray-700 p-3 rounded-lg flex-1">
+                            <label className="flex items-center space-x-2 cursor-pointer bg-input border border-border p-3 rounded-lg flex-1">
                                 <input
                                     type="radio"
                                     name="type"
                                     value="DOUBLE"
                                     checked={tournamentType === 'DOUBLE'}
-                                    onChange={() => setTournamentType('DOUBLE')}
+                                    onChange={() => handleTypeChange('DOUBLE')}
                                     className="accent-indigo-500"
                                 />
                                 <span>Double Phase (64 Teams)</span>
@@ -191,7 +199,7 @@ export default function TournamentSetup() {
 
                 {/* Add room form */}
                 <form onSubmit={handleLoadTeams} className="mb-6">
-                    <label className="block text-gray-400 text-xs font-bold uppercase tracking-widest mb-2">
+                    <label className="block text-muted text-xs font-bold uppercase tracking-widest mb-2">
                         Load Teams from Auction Rooms
                     </label>
                     <div className="flex gap-3">
@@ -200,12 +208,12 @@ export default function TournamentSetup() {
                             placeholder="Enter Room Code (e.g. ABCDEF)"
                             value={roomCode}
                             onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-                            className="flex-1 bg-gray-800 border border-gray-700 rounded-lg p-3 text-white uppercase font-mono tracking-wider focus:outline-none focus:border-indigo-500"
+                            className="flex-1 bg-input border border-border rounded-lg p-3 text-txt uppercase font-mono tracking-wider focus:outline-none focus:border-indigo-500"
                         />
                         <button
                             type="submit"
                             disabled={fetchingTeams || !roomCode}
-                            className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-800 text-white font-bold py-3 px-6 rounded-lg uppercase tracking-wider transition-all"
+                            className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-input disabled:text-muted text-white font-bold py-3 px-6 rounded-lg uppercase tracking-wider transition-all cursor-pointer"
                         >
                             {fetchingTeams ? 'Loading...' : 'Load'}
                         </button>
@@ -215,18 +223,18 @@ export default function TournamentSetup() {
                 {/* Display loaded rooms */}
                 {loadedRooms.length > 0 && (
                     <div className="mb-6">
-                        <label className="block text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2">
+                        <label className="block text-muted text-[10px] font-bold uppercase tracking-widest mb-2">
                             Loaded Auction Rooms
                         </label>
                         <div className="flex flex-wrap gap-2">
                             {loadedRooms.map(room => (
-                                <div key={room.code} className="flex items-center space-x-2 bg-gray-800 border border-gray-750 px-3 py-1.5 rounded-lg text-xs">
-                                    <span className="font-mono font-bold text-indigo-400">{room.code}</span>
-                                    <span className="text-gray-400">({room.count} teams)</span>
+                                <div key={room.code} className="flex items-center space-x-2 bg-input border border-border px-3 py-1.5 rounded-lg text-xs">
+                                    <span className="font-mono font-bold text-indigo-500 dark:text-indigo-400">{room.code}</span>
+                                    <span className="text-muted">({room.count} teams)</span>
                                     <button
                                         type="button"
                                         onClick={() => handleRemoveRoom(room.code)}
-                                        className="text-red-400 hover:text-red-500 font-bold ml-1"
+                                        className="text-red-500 hover:text-red-600 font-bold ml-1 cursor-pointer"
                                         title="Remove room teams"
                                     >
                                         ✕
@@ -241,7 +249,7 @@ export default function TournamentSetup() {
                 {teams.length > 0 && (
                     <form onSubmit={handleCreate} className="space-y-6">
                         <div>
-                            <label className="block text-gray-400 text-xs font-bold uppercase tracking-widest mb-2">
+                            <label className="block text-muted text-xs font-bold uppercase tracking-widest mb-2">
                                 Tournament Name
                             </label>
                             <input
@@ -249,30 +257,30 @@ export default function TournamentSetup() {
                                 placeholder="Enter tournament name (e.g. Champions League)"
                                 value={tournamentName}
                                 onChange={(e) => setTournamentName(e.target.value)}
-                                className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-indigo-500"
+                                className="w-full bg-input border border-border rounded-lg p-3 text-txt focus:outline-none focus:border-indigo-500"
                                 required
                             />
                         </div>
 
                         <div>
                             <div className="flex justify-between items-center mb-2">
-                                <label className="text-gray-400 text-xs font-bold uppercase tracking-widest">
+                                <label className="text-muted text-xs font-bold uppercase tracking-widest">
                                     Select Teams ({selectedTeamIds.length} / {requiredCount})
                                 </label>
                                 {selectedTeamIds.length !== requiredCount && (
-                                    <span className="text-xs text-yellow-500 font-semibold animate-pulse">
+                                    <span className="text-xs text-yellow-600 dark:text-yellow-500 font-semibold animate-pulse">
                                         Must select exactly {requiredCount} teams
                                     </span>
                                 )}
                             </div>
-                            <div className="bg-gray-800/50 border border-gray-800 rounded-xl p-4 max-h-60 overflow-y-auto space-y-2.5">
+                            <div className="bg-input/30 border border-border rounded-xl p-4 max-h-60 overflow-y-auto space-y-2.5">
                                 {teams.map((team) => (
                                     <label
                                         key={team.id}
                                         className={`flex items-center justify-between p-3 rounded-lg border transition-all cursor-pointer ${
                                             selectedTeamIds.includes(team.id)
-                                                ? 'bg-indigo-600/10 border-indigo-500 text-white'
-                                                : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600'
+                                                ? 'bg-indigo-500/10 border-indigo-500 text-indigo-600 dark:text-indigo-400 font-bold'
+                                                : 'bg-input border-border text-muted hover:border-indigo-500/50'
                                         }`}
                                     >
                                         <div className="flex items-center space-x-3">
@@ -283,8 +291,8 @@ export default function TournamentSetup() {
                                                 className="accent-indigo-500 h-4 w-4"
                                             />
                                             <div>
-                                                <p className="font-bold text-sm text-white">{team.name}</p>
-                                                <p className="text-xs text-gray-400">Owner: {team.ownerName}</p>
+                                                <p className="font-bold text-sm text-txt">{team.name}</p>
+                                                <p className="text-xs text-muted">Owner: {team.ownerName}</p>
                                             </div>
                                         </div>
                                     </label>
@@ -295,7 +303,7 @@ export default function TournamentSetup() {
                         <button
                             type="submit"
                             disabled={loading || selectedTeamIds.length !== requiredCount}
-                            className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-800 disabled:text-gray-600 text-white font-black uppercase tracking-widest py-4 rounded-lg transition-all"
+                            className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:bg-input disabled:text-muted text-white font-black uppercase tracking-widest py-4 rounded-lg transition-all cursor-pointer"
                         >
                             {loading ? 'Creating...' : 'Start Tournament'}
                         </button>
@@ -305,3 +313,5 @@ export default function TournamentSetup() {
         </div>
     );
 }
+
+

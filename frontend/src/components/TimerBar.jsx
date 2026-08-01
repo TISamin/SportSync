@@ -21,12 +21,12 @@ export default function TimerBar() {
     return (
         <div className="w-full">
             <div className="flex justify-between items-end mb-2">
-                <span className="text-gray-400 text-xs font-bold uppercase tracking-widest">Time Remaining</span>
-                <span className={`text-2xl font-black ${timeRemaining <= 10 ? 'text-red-500 animate-pulse' : 'text-white'}`}>
+                <span className="text-muted text-xs font-bold uppercase tracking-widest">Time Remaining</span>
+                <span className={`text-2xl font-black ${timeRemaining <= 10 ? 'text-red-500 animate-pulse' : 'text-txt'}`}>
                     {timeRemaining}s
                 </span>
             </div>
-            <div className="h-3 w-full bg-gray-800 rounded-full overflow-hidden">
+            <div className="h-3 w-full bg-input rounded-full overflow-hidden">
                 <div 
                     className={`h-full ${bgColor} shadow-[0_0_10px] ${shadowColor} transition-all duration-1000 ease-linear`}
                     style={{ width: `${percentage}%` }}
@@ -34,4 +34,5 @@ export default function TimerBar() {
             </div>
         </div>
     );
+
 }

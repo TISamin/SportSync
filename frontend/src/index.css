@@ -1,6 +1,48 @@
 @import "tailwindcss";
 
-body {
-  background-color: #f9fafb; /* bg-gray-50 */
-  color: #111827; /* text-gray-900 */
+@variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-base: var(--bg-base);
+  --color-surface: var(--bg-surface);
+  --color-input: var(--bg-input);
+  --color-txt: var(--text-main);
+  --color-muted: var(--text-muted);
+  --color-border: var(--border-main);
 }
+
+:root {
+  --bg-base: #f9fafb;
+  --bg-surface: #ffffff;
+  --bg-input: #f3f4f6;
+  --text-main: #111827;
+  --text-muted: #4b5563;
+  --border-main: #e5e7eb;
+}
+
+.dark {
+  --bg-base: #030712;
+  --bg-surface: #111827;
+  --bg-input: #1f2937;
+  --text-main: #f9fafb;
+  --text-muted: #9ca3af;
+  --border-main: #1f2937;
+}
+
+body {
+  background-color: var(--bg-base);
+  color: var(--text-main);
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+@keyframes marquee {
+  0% { transform: translateX(50%); }
+  100% { transform: translateX(-100%); }
+}
+
+.animate-marquee {
+  display: inline-block;
+  animation: marquee 30s linear infinite;
+}
+
+

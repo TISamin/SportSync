@@ -1,0 +1,16 @@
+name,age,batch,role,style,category,image_url,player_number,base_price
+Lionel Messi,39,2004,Forward,Left Foot,A,/players/messi.png,10,1500
+Cristiano Ronaldo,41,2003,Forward,Right Foot,A,/players/ronaldo.png,7,1000
+Kylian Mbappe,27,2015,Forward,Right Foot,B,/players/mbappe.png,9,1000
+Kevin De Bruyne,35,2008,Midfielder,Right Foot,B,/players/kdb.png,17,700
+Luka Modric,40,2003,Midfielder,Right Foot,B,/players/modric.png,10,500
+Virgil van Dijk,35,2009,Defender,Right Foot,B,/players/van.png,4,650
+Alisson Becker,33,2010,Goalkeeper,Right Foot,B,/players/alison.png,1,600
+Erling Haaland,26,2016,Forward,Left Foot,B,/players/haaland.png,9,850
+Jude Bellingham,23,2019,Midfielder,Right Foot,B,/players/bellingham.png,5,750
+Bukayo Saka,24,2018,Forward,Left Foot,C,/players/saka.png,7,450
+Declan Rice,27,2017,Midfielder,Right Foot,C,/players/rice.png,41,500
+William Saliba,25,2018,Defender,Right Foot,C,/players/saliba.png,2,480
+Pedri Gonzalez,23,2019,Midfielder,Right Foot,C,/players/pedri.png,8,420
+Gavi Paez,21,2021,Midfielder,Right Foot,D,/players/gavi.png,6,300
+Lamine Yamal,19,2023,Forward,Left Foot,D,/players/yamal.png,19,350
