@@ -14,7 +14,7 @@ export default function AuctionRoom() {
     const navigate = useNavigate();
     const isRoomAdminRoute = window.location.pathname.startsWith('/admin');
     
-    const { roomCode: storeCode, isAdmin, myTeamId, setRoomInfo, setMyTeamId, statusMessage, isFinished, currentPlayer, teams, categoryCounts } = useAuctionStore();
+    const { roomCode: storeCode, isAdmin, myTeamId, setRoomInfo, setMyTeamId, statusMessage, isFinished, currentPlayer, teams, categoryCounts, reset } = useAuctionStore();
     const { connected, startAuction, nextPlayer, placeBid } = useAuctionSocket(storeCode);
 
     const myTeam = teams.find(t => t.id === myTeamId);
@@ -35,6 +35,7 @@ export default function AuctionRoom() {
     // Initial load and verification
     useEffect(() => {
         const init = async () => {
+            reset();
             try {
                 const res = await getRoomState(roomCode);
                 if (res.success) {
@@ -54,7 +55,7 @@ export default function AuctionRoom() {
             }
         };
         init();
-    }, [roomCode, isRoomAdminRoute, navigate, setRoomInfo]);
+    }, [roomCode, isRoomAdminRoute, navigate, setRoomInfo, reset]);
 
     const handleJoin = async (e) => {
         e.preventDefault();
@@ -66,8 +67,8 @@ export default function AuctionRoom() {
             } else {
                 setJoinError(res.error);
             }
-        } catch {
-            setJoinError('Failed to join room');
+        } catch (err) {
+            setJoinError(err.response?.data?.error || err.message || 'Failed to join room');
         }
     };
 
