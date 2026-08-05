@@ -21,7 +21,9 @@ export default function BidPanel({ onBid }) {
     }
 
     const handleBid = () => {
+        console.log("Bid button clicked! isAdmin:", isAdmin, "myTeamId:", myTeamId, "isLeading:", isLeading, "requiredBid:", requiredBid);
         if (!isAdmin && myTeamId && !isLeading) {
+            console.log("Calling onBid with:", myTeamId, requiredBid);
             onBid(myTeamId, requiredBid);
         }
     };

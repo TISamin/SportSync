@@ -70,11 +70,13 @@ export const useAuctionSocket = (roomCode) => {
     };
 
     const placeBid = (teamId, amount) => {
+        console.log("placeBid called! stompClient.current:", stompClient.current, "connected:", connected, "roomCode:", roomCode, "teamId:", teamId, "amount:", amount);
         if (stompClient.current && connected) {
             stompClient.current.publish({
                 destination: `/app/auction/bid`,
                 body: JSON.stringify({ roomCode, teamId, amount })
             });
+            console.log("STOMP bid message published!");
         }
     };
 
