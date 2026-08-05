@@ -18,6 +18,11 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
+        // Native WebSocket endpoint — avoids 'unload' Permissions Policy violation
+        registry.addEndpoint("/ws-native")
+                .setAllowedOriginPatterns("*");
+
+        // SockJS fallback endpoint
         registry.addEndpoint("/ws")
                 .setAllowedOriginPatterns("*")
                 .withSockJS();
